@@ -180,3 +180,25 @@ changing `scripts/herdr-apns-notifier.py`, bump its `WATCHER_VERSION` (hosts
 running an older one are offered the update) and run
 `node scripts/embed-watcher.mjs`; a test fails until you do.
 
+
+## A fork, over the air
+
+A fork cannot sign the App Store bundle id (Apple makes them unique across
+teams), and it has no reason to go through TestFlight for every JS change. So
+`app.config.ts` takes a fork's own bundle id, Apple team and EAS project from
+the environment and leaves `app.json` alone, and two scripts do the rest:
+
+```sh
+. scripts/ota.env                 # the fork's ids; edit for yours
+npx eas-cli login                 # once
+npx eas-cli init                  # once: creates the EAS project, prints its id → scripts/ota.env
+scripts/ota-build.sh              # once per NATIVE change: Release build onto every paired device
+scripts/ota-deploy.sh             # every JS change: gates, then `eas update` to the production channel
+```
+
+Devices are the ones paired with this Mac (`xcrun devicectl list devices`),
+signed with the team's Apple Development identity, which Xcode must be logged
+in to. Updates follow the native fingerprint: a JS-only change reaches every
+installed build, a change under `modules/`, a new native dependency or an
+`app.json` edit changes the fingerprint and needs `ota-build.sh` again. An
+update is fetched on launch and runs from the launch after that.
