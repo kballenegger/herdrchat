@@ -1,4 +1,10 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { withEntitlementsPlist, type ConfigPlugin } from 'expo/config-plugins';
+
+const withoutPush: ConfigPlugin = (config) => withEntitlementsPlist(config, (mod) => {
+  delete mod.modResults['aps-environment'];
+  return mod;
+});
 
 /**
  * app.json, plus what a fork needs to build and ship its own copy.
@@ -14,6 +20,10 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
  *
  * With none of them set the config is exactly app.json, so upstream builds are
  * unchanged. A fork sources scripts/ota.env before building.
+ *
+ * A fork also drops the push entitlement: the relay sends only to the App
+ * Store bundle id, so the capability would buy nothing, and unregistered with
+ * Apple for the fork's id it keeps automatic signing from making a profile.
  */
 export default ({ config }: ConfigContext): ExpoConfig => {
   const bundleId = process.env.HERDRCHAT_BUNDLE_ID;
@@ -22,6 +32,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const expo: ExpoConfig = { ...config, name: config.name ?? 'HerdrChat', slug: config.slug ?? 'herdrchat' };
 
   if (bundleId) {
+    // Push stays with the App Store app: the relay sends only to its bundle
+    // id, so a fork's entitlement would buy nothing and, unregistered with
+    // Apple for the fork's id, it stops automatic signing from producing a
+    // profile at all.
     expo.ios = { ...expo.ios, bundleIdentifier: bundleId };
     expo.android = { ...expo.android, package: bundleId.toLowerCase() };
   }
@@ -34,5 +48,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     expo.updates = { url: `https://u.expo.dev/${projectId}`, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0 };
     expo.runtimeVersion = { policy: 'fingerprint' };
   }
-  return expo;
+  // Applied here, ahead of app.json's plugins, so its edit lands last:
+  // expo-notifications' plugin would otherwise put the entitlement back.
+  return bundleId ? (withoutPush(expo) as ExpoConfig) : expo;
 };
