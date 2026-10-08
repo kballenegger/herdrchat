@@ -12,13 +12,21 @@
 set -eu
 cd "$(dirname "$0")/.."
 . scripts/ota.env
-: "${EAS_PROJECT_ID:?run npx eas-cli init first, then put the project id in scripts/ota.env}"
+if [ -z "${EAS_PROJECT_ID:-}" ]; then
+  echo "EAS_PROJECT_ID is empty: this build cannot take updates. Run npx eas-cli init, put the id in scripts/ota.env, and build again." >&2
+fi
 
 DEVICES=${*:-"Hakuba Kaohsiung"}
 npx expo prebuild --platform ios --clean
+failed=
 for name in $DEVICES; do
   udid=$(xcrun devicectl list devices 2>/dev/null | awk -v n="$name" '$1 == n { print $2 }')
-  [ -n "$udid" ] || { echo "No paired device named $name" >&2; exit 2; }
+  [ -n "$udid" ] || { echo "No paired device named $name" >&2; failed="$failed $name"; continue; }
   echo "==> $name ($udid)"
-  npx expo run:ios --device "$udid" --configuration Release --no-bundler
+  # One device off the network must not cost the other its install.
+  npx expo run:ios --device "$udid" --configuration Release --no-bundler || failed="$failed $name"
 done
+if [ -n "$failed" ]; then
+  echo "Not installed on:$failed" >&2
+  exit 1
+fi
