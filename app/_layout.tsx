@@ -137,13 +137,18 @@ function RootStack() {
             from the menu in the Chats header and presented below. */}
         <Stack.Screen name="index" />
         {/* `gestureEnabled` is the native-stack default, and it is stated here
-            anyway. This is the only pushed screen in the app, its back control
+            anyway. This is the app's main pushed screen (a chat's subagents and workflows
+            push over it the same way), its back control
             is one chevron in the corner, and it draws its own header — so a
             future `screenOptions` change could take the swipe away and nothing
             would notice. Written down, it is a decision; inherited, it was an
             accident that happened to be right. `.maestro/thread-back.yaml`
             checks it still works. */}
         <Stack.Screen name="chat/[workspaceId]" options={{ gestureEnabled: true }} />
+        {/* What a chat's subagent and workflow cards open: pushed over the
+            chat, on iPad over the split, with the same swipe back. */}
+        <Stack.Screen name="chat/agent" options={{ gestureEnabled: true }} />
+        <Stack.Screen name="chat/workflow" options={{ gestureEnabled: true }} />
         {/* Hosts and Settings are places you visit and come back from, so they
             are presented like the other full-height screens here rather than
             pushed: a sheet says "this goes away and you are back in your
