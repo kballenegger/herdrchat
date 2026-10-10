@@ -45,6 +45,7 @@ const MATERIAL: Partial<Record<IconName, AndroidSymbol>> = {
   magnifyingglass: 'search',
   pencil: 'edit',
   photo: 'image',
+  'person.2': 'group',
   'photo.on.rectangle': 'photo_library',
   plus: 'add',
   'server.rack': 'dns',
