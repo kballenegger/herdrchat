@@ -26,6 +26,15 @@ export interface DemoPane {
   title?: string;
 }
 
+/**
+ * A pane with no agent in it: a shell, which the list shows as a terminal row
+ * and the terminal screen attaches to (`src/lib/demo/terminal.ts`).
+ */
+export interface DemoShellPane {
+  paneId: string;
+  cwd: string;
+}
+
 /** A demo workspace: its first pane inline, any further agents in `morePanes`. */
 export interface DemoWorkspace extends DemoPane {
   workspaceId: string;
@@ -33,6 +42,8 @@ export interface DemoWorkspace extends DemoPane {
   number: number;
   /** More agents in the same workspace, each a chat of its own in the list. */
   morePanes?: readonly DemoPane[];
+  /** Panes with no agent, after the agents in herdr's order. */
+  shellPanes?: readonly DemoShellPane[];
 }
 
 export const DEMO_WORKSPACES: readonly DemoWorkspace[] = [
@@ -91,6 +102,8 @@ export const DEMO_WORKSPACES: readonly DemoWorkspace[] = [
     agentStatus: 'idle',
     title: 'Archived projects migration',
     morePanes: [{ paneId: 'w6:p2', cwd: '/home/demo/api/web', agentStatus: 'working', title: 'Save button wrap' }],
+    // A shell beside the two agents: the terminal row, and its recorded screen.
+    shellPanes: [{ paneId: 'w6:p3', cwd: '/home/demo/api' }],
   },
 ];
 
