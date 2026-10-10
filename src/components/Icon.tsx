@@ -64,6 +64,8 @@ const MATERIAL: Partial<Record<IconName, AndroidSymbol>> = {
   terminal: 'terminal',
   'questionmark.bubble': 'contact_support',
   'keyboard.chevron.compact.down': 'keyboard_hide',
+  keyboard: 'keyboard',
+  'doc.on.clipboard': 'content_paste',
   'pin.fill': 'push_pin',
   pin: 'push_pin',
   'pin.slash': 'keep_off',
