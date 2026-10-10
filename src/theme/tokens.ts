@@ -84,6 +84,8 @@ export const size = {
    * one and the other two follow.
    */
   segmented: { inset: 3, height: 36 },
+  /** The chevron after a header title that opens a menu (Chats: Spaces or Agents). */
+  titleMenuChevron: 16,
   /** A glyph in a thread header's round controls (reload, tool calls). */
   headerGlyph: 19,
   /** The floating "jump to latest" circle; `hitSlop` carries it past 44pt. */
