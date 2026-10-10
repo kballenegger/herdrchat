@@ -29,6 +29,16 @@ where regressions are found.
 | `regression/slash-commands` | the `/` palette from the Demo's catalogue: Built-in and Skills sections, a built-in's hint (`/model [model]`), the hidden built-in left out, narrowing to one headerless ranked list (`/release-notes`, then `/review`), `/review` (optional `[pr]`) sent at once and answered, `/add-dir` filling in with its required `<path>` hint after it until something is typed, `/compact` (optional argument) sent at once from a fresh `/` with its note in the thread, the notes folder's own `/notes:summarise` (screenshots `slash-palette-<appearance>`, `slash-filled-<appearance>`: the hint must start right after the caret) |
 | `regression/shell-commands` | a `!` command as one block in the thread: the Demo notes chat's seeded `! git status --short` with its two lines of output, the hint above the composer once `!` is typed in a Claude chat, a sent `! ls` landing as a block with the Demo's three-file listing under it and its echo confirmed rather than "Failed to send" (screenshots `shell-seeded-<appearance>`, `shell-<appearance>`: the output box must read as a terminal, stdout in the label colour) |
 
+The shell block against a real Claude Code, checked by hand on a phone
+(Gimel), in light and dark, since the Demo cannot reproduce a real record:
+
+- `! pwd` and `!pwd` from the phone, and `!pwd` typed in the desktop TUI: one
+  block each, the echo confirmed, never "Failed to send".
+- `! ls -la | head`: symlinks read `->`, not `-&gt;`.
+- `! ls /nope`: the error in the attention colour.
+- `! seq 1 200`: folded with "Show all 200 lines", opening and closing.
+- `! sleep 3; echo done`: "Running" until `done` lands.
+
 Maestro cannot press hardware-keyboard key commands, so these are checked by
 hand on an iPad with a keyboard, after a native build:
 
