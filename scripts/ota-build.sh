@@ -41,6 +41,7 @@ reachable() {
 if [ -z "$install_only" ]; then
   mkdir -p "$OUT"
   npx expo prebuild --platform ios --clean
+  scripts/ensure-metal-toolchain.sh
   echo "==> Building Release for generic iOS"
   xcodebuild -workspace ios/HerdrChat.xcworkspace -scheme HerdrChat -configuration Release \
     -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED" \
