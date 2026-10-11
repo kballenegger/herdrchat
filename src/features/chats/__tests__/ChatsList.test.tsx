@@ -108,7 +108,7 @@ beforeEach(() => {
   mockPush.mockClear();
   mockOpenChat.mockClear();
   mockPinned = [];
-  useChatSelection.setState({ selection: null });
+  useChatSelection.setState({ detail: null });
 });
 
 // "Each top level card doesn't represent an agent, it should just list the
@@ -162,7 +162,7 @@ it('draws one agent beside a shell as a space, the agent and its terminal under 
 // The lone agent's row is the workspace chat, so it is the one lit while
 // that chat is open, under the workspace's key.
 it("highlights a lone agent's row while its workspace chat is open", async () => {
-  useChatSelection.setState({ selection: { connectionId: 'demo', workspaceId: 'w7', title: 'Landing page copy' } });
+  useChatSelection.setState({ detail: { kind: 'chat', connectionId: 'demo', workspaceId: 'w7', title: 'Landing page copy' } });
   const screen = await render(<ChatsList selectedWorkspaceId="w7" selectedConnectionId="demo" />);
   expect(screen.getByTestId('pane-row-w7:p1')).toHaveProp('accessibilityState', { selected: true });
 });
@@ -170,7 +170,7 @@ it("highlights a lone agent's row while its workspace chat is open", async () =>
 // Opened as its own pane chat while w7 held two agents; the other exited,
 // and it is alone beside the shell. Its row is keyed `w7` now, and stays lit.
 it("keeps a lone agent's row highlighted when it was opened as a pane chat", async () => {
-  useChatSelection.setState({ selection: { connectionId: 'demo', workspaceId: 'w7', paneId: 'w7:p1', title: 'Landing page copy' } });
+  useChatSelection.setState({ detail: { kind: 'chat', connectionId: 'demo', workspaceId: 'w7', paneId: 'w7:p1', title: 'Landing page copy' } });
   const screen = await render(<ChatsList selectedWorkspaceId="w7" selectedConnectionId="demo" />);
   expect(screen.getByTestId('pane-row-w7:p1')).toHaveProp('accessibilityState', { selected: true });
   expect(screen.getByTestId('chat-row-w7')).not.toHaveProp('accessibilityState', { selected: true });
