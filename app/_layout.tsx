@@ -184,8 +184,9 @@ function RootStack() {
           options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents' }}
         />
         {/* A workspace's layout on a phone, sized to its tabs like the rename
-            sheet. iPad shows the same drawing as a card beside the layout
-            button instead (`SpaceLayoutPopover`). */}
+            sheet. iPad shows the same drawing as a floating card level with
+            the layout button instead, beside the list when there is room
+            (`LayoutPeekOverlay`, src/features/spaces/LayoutPeek.tsx). */}
         <Stack.Screen
           name="space-layout"
           options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents' }}
