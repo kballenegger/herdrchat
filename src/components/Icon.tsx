@@ -78,6 +78,9 @@ const MATERIAL: Partial<Record<IconName, AndroidSymbol>> = {
   'sparkles': 'auto_awesome',
   'chevron.right.2': 'keyboard_double_arrow_right',
   xmark: 'close',
+  'rectangle.split.2x2': 'grid_view',
+  'square.split.2x2': 'grid_view',
+  'arrow.up.left.and.arrow.down.right': 'open_in_full',
   'xmark.circle.fill': 'cancel',
 };
 

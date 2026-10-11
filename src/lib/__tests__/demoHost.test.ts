@@ -41,7 +41,7 @@ describe('DemoHost as a herdr host', () => {
   it('lists workspaces, so the chat list has something to show', async () => {
     const client = new HerdrClient(new DemoHost());
     const workspaces = await client.workspaces();
-    expect(workspaces.map((w) => w.label)).toEqual(['herdrchat', 'notes', 'scratch', 'ledger', 'journal', 'api']);
+    expect(workspaces.map((w) => w.label)).toEqual(['herdrchat', 'notes', 'scratch', 'ledger', 'journal', 'api', 'site']);
   });
 
   // A workspace with two agents, each a chat of its own in the list.
@@ -49,8 +49,9 @@ describe('DemoHost as a herdr host', () => {
     const client = new HerdrClient(new DemoHost());
     const snapshot = await client.snapshot();
     const api = snapshot.workspaces?.find((w) => w.workspaceId === 'w6');
-    // Three panes: the two agents and a shell, whose terminal row the list shows.
-    expect(api).toMatchObject({ label: 'api', number: 6, paneCount: 3, agentStatus: 'working' });
+    // Four panes in two tabs: the two agents and a shell, then a dev server's
+    // shell alone in the second tab; each shell is a terminal row in the list.
+    expect(api).toMatchObject({ label: 'api', number: 6, paneCount: 4, tabCount: 2, agentStatus: 'working' });
     const agents = snapshot.agents.filter((a) => a.workspaceId === 'w6');
     expect(agents.map((a) => [a.paneId, a.agent, a.cwd, a.agentStatus, a.agentSession?.value])).toEqual([
       ['w6:p1', 'claude', '/home/demo/api', 'idle', DEMO_SESSION_IDS['w6:p1']],
@@ -58,8 +59,8 @@ describe('DemoHost as a herdr host', () => {
     ]);
     // Each titled by its own session, which titles its row and its thread.
     expect(agents.map((a) => a.title)).toEqual(['Archived projects migration', 'Save button wrap']);
-    // The other five keep the one pane they always had.
-    expect(snapshot.workspaces?.filter((w) => w.workspaceId !== 'w6').map((w) => w.paneCount)).toEqual([1, 1, 1, 1, 1]);
+    // The first five keep the one pane they always had; site's agent has a shell beside it.
+    expect(snapshot.workspaces?.filter((w) => w.workspaceId !== 'w6').map((w) => w.paneCount)).toEqual([1, 1, 1, 1, 1, 2]);
   });
 
   // Scratch and the OMP ledger have no session title, so the Demo also shows
@@ -75,6 +76,7 @@ describe('DemoHost as a herdr host', () => {
       ['w5:p1', 'Daily screen journal'],
       ['w6:p1', 'Archived projects migration'],
       ['w6:p2', 'Save button wrap'],
+      ['w7:p1', 'Landing page copy'],
     ]);
   });
 
@@ -184,7 +186,7 @@ describe('DemoHost as an agent', () => {
       await expect(operation()).rejects.toThrow('Select your own host');
     }
     expect((await client.workspaces()).map(workspace => workspace.label))
-      .toEqual(['herdrchat', 'notes', 'scratch', 'ledger', 'journal', 'api']);
+      .toEqual(['herdrchat', 'notes', 'scratch', 'ledger', 'journal', 'api', 'site']);
   });
 
   it.each([false, true])('stops only the selected demo agent (hard: %s)', async hard => {
@@ -578,5 +580,27 @@ describe('DemoHost machine nuku', () => {
     const store = new TranscriptStore(host);
     const path = store.sessionTranscriptPath(await store.homeDirectory(), DEMO_WORKSPACES[1]!.cwd, DEMO_SESSION_IDS['w2:p1']!)!;
     expect(JSON.stringify((await store.recent(path, 'claude', 262_144)).messages)).toContain('nuku is off the network');
+  });
+});
+
+// The layout view draws the Demo's w6 as two tabs: its agents side by side
+// with the shell under the first, then a dev server alone. w2 is one pane.
+describe("the Demo's tabs and layouts", () => {
+  it('sends a tab and a layout for each tab, the panes where they sit', async () => {
+    const snapshot = await new HerdrClient(new DemoHost()).snapshot();
+    expect(snapshot.tabs?.filter((tab) => tab.workspaceId === 'w6').map((tab) => [tab.tabId, tab.number, tab.label, tab.paneCount])).toEqual([
+      ['w6:t1', 1, 'api', 3], ['w6:t2', 2, 'server', 1],
+    ]);
+    const w6 = snapshot.layouts?.filter((layout) => layout.workspaceId === 'w6') ?? [];
+    expect(w6.map((layout) => layout.panes.map((pane) => [pane.paneId, pane.rect.x, pane.rect.y, pane.rect.width, pane.rect.height]))).toEqual([
+      [['w6:p1', 0, 0, 80, 32], ['w6:p3', 0, 32, 80, 16], ['w6:p2', 80, 0, 80, 48]],
+      [['w6:p4', 0, 0, 160, 48]],
+    ]);
+    expect(w6[0]?.focusedPaneId).toBe('w6:p2');
+    expect(snapshot.panes.find((pane) => pane.paneId === 'w6:p4')).toMatchObject({ tabId: 'w6:t2', title: 'npm run dev' });
+    expect(snapshot.workspaces?.find((w) => w.workspaceId === 'w6')).toMatchObject({ tabCount: 2, activeTabId: 'w6:t1' });
+    const w2 = snapshot.layouts?.filter((layout) => layout.workspaceId === 'w2') ?? [];
+    expect(w2.map((layout) => layout.panes.map((pane) => pane.paneId))).toEqual([['w2:p1']]);
+    expect(snapshot.tabs?.find((tab) => tab.workspaceId === 'w2')).toMatchObject({ label: 'notes', paneCount: 1 });
   });
 });

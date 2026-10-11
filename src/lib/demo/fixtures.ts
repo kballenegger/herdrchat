@@ -35,7 +35,27 @@ export interface DemoShellPane {
   /** Its terminal, as the snapshot's `terminal_id`: what its terminal attaches by. */
   terminalId: string;
   cwd: string;
+  /** The title the program gave its terminal, which its row and layout box show. */
+  title?: string;
 }
+
+/**
+ * One tab of a demo workspace, for the snapshot's `tabs` and `layouts`: its
+ * label, and each pane's rect in cells (x, y, width, height) over a
+ * `DEMO_TAB_COLUMNS` × `DEMO_TAB_ROWS` area, as herdr measures them.
+ */
+export interface DemoTab {
+  label: string;
+  panes: readonly { paneId: string; rect: readonly [number, number, number, number] }[];
+  /** The pane the tab's focus is in; its first pane when left out. */
+  focusedPaneId?: string;
+  /** Zoomed on its focused pane. */
+  zoomed?: boolean;
+}
+
+/** A demo tab's area, in cells: a laptop's terminal beside herdr's sidebar. */
+export const DEMO_TAB_COLUMNS = 160;
+export const DEMO_TAB_ROWS = 48;
 
 /** A demo workspace: its first pane inline, any further agents in `morePanes`. */
 export interface DemoWorkspace extends DemoPane {
@@ -46,6 +66,11 @@ export interface DemoWorkspace extends DemoPane {
   morePanes?: readonly DemoPane[];
   /** Panes with no agent, after the agents in herdr's order. */
   shellPanes?: readonly DemoShellPane[];
+  /**
+   * Its tabs, first active. Left out: one tab named after the workspace,
+   * its panes side by side (`demoTabs`).
+   */
+  tabs?: readonly DemoTab[];
 }
 
 export const DEMO_WORKSPACES: readonly DemoWorkspace[] = [
@@ -104,10 +129,69 @@ export const DEMO_WORKSPACES: readonly DemoWorkspace[] = [
     agentStatus: 'idle',
     title: 'Archived projects migration',
     morePanes: [{ paneId: 'w6:p2', cwd: '/home/demo/api/web', agentStatus: 'working', title: 'Save button wrap' }],
-    // A shell beside the two agents: the terminal row, and its recorded screen.
-    shellPanes: [{ paneId: 'w6:p3', terminalId: 'term_w6_p3', cwd: '/home/demo/api' }],
+    // A shell beside the two agents: the terminal row, and its recorded
+    // screen. A second shell, a dev server, alone in a tab of its own.
+    shellPanes: [
+      { paneId: 'w6:p3', terminalId: 'term_w6_p3', cwd: '/home/demo/api' },
+      { paneId: 'w6:p4', terminalId: 'term_w6_p4', cwd: '/home/demo/api/web', title: 'npm run dev' },
+    ],
+    // The layout view's two tabs: the agents side by side with the shell
+    // under the first one, then the dev server's tab.
+    tabs: [
+      {
+        label: 'api',
+        panes: [
+          { paneId: 'w6:p1', rect: [0, 0, 80, 32] },
+          { paneId: 'w6:p3', rect: [0, 32, 80, 16] },
+          { paneId: 'w6:p2', rect: [80, 0, 80, 48] },
+        ],
+        focusedPaneId: 'w6:p2',
+      },
+      { label: 'server', panes: [{ paneId: 'w6:p4', rect: [0, 0, 160, 48] }] },
+    ],
+  },
+  {
+    // One agent beside a shell: a space card titled by the workspace, with
+    // the agent (still the workspace's chat) and then the terminal under it,
+    // not the agent's own card with the terminal hanging off it.
+    workspaceId: 'w7',
+    label: 'site',
+    number: 7,
+    paneId: 'w7:p1',
+    cwd: '/home/demo/site',
+    agentStatus: 'idle',
+    title: 'Landing page copy',
+    shellPanes: [{ paneId: 'w7:p2', terminalId: 'term_w7_p2', cwd: '/home/demo/site' }],
+    // The agent above, the shell in a strip below it.
+    tabs: [{
+      label: 'site',
+      panes: [{ paneId: 'w7:p1', rect: [0, 0, 160, 32] }, { paneId: 'w7:p2', rect: [0, 32, 160, 16] }],
+    }],
   },
 ];
+
+/**
+ * A demo workspace's tabs: its own, or one named after it with every pane
+ * side by side in herdr's order (agents, then shells).
+ */
+export function demoTabs(workspace: DemoWorkspace): readonly DemoTab[] {
+  if (workspace.tabs !== undefined) return workspace.tabs;
+  const ids = [...demoPanes(workspace).map((pane) => pane.paneId), ...(workspace.shellPanes ?? []).map((pane) => pane.paneId)];
+  const width = Math.floor(DEMO_TAB_COLUMNS / Math.max(1, ids.length));
+  return [{
+    label: workspace.label,
+    panes: ids.map((paneId, index) => ({
+      paneId,
+      rect: [index * width, 0, index === ids.length - 1 ? DEMO_TAB_COLUMNS - index * width : width, DEMO_TAB_ROWS] as const,
+    })),
+  }];
+}
+
+/** The tab a demo pane is in, as herdr names it (`w6:t2`). */
+export function demoTabId(workspace: DemoWorkspace, paneId: string): string {
+  const index = demoTabs(workspace).findIndex((tab) => tab.panes.some((pane) => pane.paneId === paneId));
+  return `${workspace.workspaceId}:t${Math.max(0, index) + 1}`;
+}
 
 /** Every agent pane of a demo workspace, first pane first. */
 export function demoPanes(workspace: DemoWorkspace): DemoPane[] {
@@ -130,6 +214,7 @@ export const DEMO_SESSION_IDS: Readonly<Record<string, string>> = {
   'w5:p1': '55555555-5555-4555-8555-555555555555',
   'w6:p1': '66666666-6666-4666-8666-666666666661',
   'w6:p2': '66666666-6666-4666-8666-666666666662',
+  'w7:p1': '88888888-8888-4888-8888-888888888888',
 };
 
 export const DEMO_HOME = '/home/demo';
@@ -291,6 +376,26 @@ const SEEDS: Readonly<Record<string, readonly string[]>> = {
         {
           type: 'text',
           text: 'The label sits in a flex row with no `white-space: nowrap`, so the toolbar squeezes it. Fixing the CSS in `web/toolbar.css` now.',
+        },
+      ],
+    }),
+  ],
+  'w7:p1': [
+    line({
+      type: 'user',
+      uuid: 'd7-1',
+      timestamp: '2026-08-19T11:00:00.000Z',
+      content: 'tighten the landing page headline, it runs to three lines on a phone',
+    }),
+    line({
+      type: 'assistant',
+      uuid: 'd7-2',
+      timestamp: '2026-08-19T11:00:18.000Z',
+      model: MODEL,
+      content: [
+        {
+          type: 'text',
+          text: 'Cut it to "Your agents, in your pocket" and moved the rest into the subhead. It fits on two lines at 320pt; the dev server below is serving it.',
         },
       ],
     }),
