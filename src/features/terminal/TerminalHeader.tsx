@@ -7,27 +7,32 @@ import { Text } from '@/components/Text';
 import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
 import { minTouchTarget, radius, screenPadding, size, spacing } from '@/theme/tokens';
-import { canReconnect, phaseLabel, phaseMessage, type TerminalPhase } from './status';
+import { canReconnect, canTakeOver, phaseLabel, phaseMessage, type TerminalPhase } from './status';
 
 /**
  * The terminal's header: back, the pane's name with where it is and whether
- * it is connected, and Reconnect once the shell has gone.
+ * it is connected, and Reconnect once the shell has gone. When herdr refused
+ * the attach (another client may hold the pane), Take over beside it: the
+ * only way the app ever takes a pane from another client, and the person's.
  *
  * In the flow above the terminal, not floating over it like the thread's: a
  * terminal's top rows are its screen, and a header over them would hide the
  * one line `htop` or `vim` puts its title on.
  */
-export function TerminalHeader({ title, place, phase, onBack, onReconnect }: {
+export function TerminalHeader({ title, place, phase, onBack, onReconnect, onTakeOver }: {
   title: string;
   /** The machine's label, for a pane on one of the host's machines. */
   place: string | null;
   phase: TerminalPhase;
   onBack: () => void;
   onReconnect: () => void;
+  onTakeOver: () => void;
 }) {
   const { colors } = useTheme();
   const subtitle = [place, phaseLabel(phase)].filter((part): part is string => part !== null).join(' · ');
-  const dot = phase.kind === 'open' ? colors.positive : canReconnect(phase) ? colors.attention : colors.tertiaryLabel;
+  // Gone, whether or not a Reconnect could bring it back.
+  const gone = phase.kind === 'closed' || phase.kind === 'failed';
+  const dot = phase.kind === 'open' ? colors.positive : gone ? colors.attention : colors.tertiaryLabel;
   const message = phaseMessage(phase);
   return (
     <View testID="terminal-header">
@@ -48,11 +53,29 @@ export function TerminalHeader({ title, place, phase, onBack, onReconnect }: {
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
             <View style={{ width: size.statusDot, height: size.statusDot, borderRadius: radius.full, backgroundColor: dot }} />
-            <Text testID="terminal-status" variant="caption" color={canReconnect(phase) ? 'attention' : 'secondary'} numberOfLines={1} style={{ flexShrink: 1 }}>
+            <Text testID="terminal-status" variant="caption" color={gone ? 'attention' : 'secondary'} numberOfLines={1} style={{ flexShrink: 1 }}>
               {subtitle}
             </Text>
           </View>
         </View>
+        {canTakeOver(phase) && (
+          <Glass interactive style={{ borderRadius: radius.full, overflow: 'hidden' }}>
+            <Pressable
+              onPress={() => {
+                haptics.light();
+                onTakeOver();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Take over"
+              accessibilityHint="Takes this pane from the other client attached to it"
+              testID="terminal-takeover"
+              style={{ height: minTouchTarget, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center' }}>
+              <Text variant="subhead" weight="600" color="tint">
+                Take over
+              </Text>
+            </Pressable>
+          </Glass>
+        )}
         {canReconnect(phase) && (
           <Glass interactive style={{ borderRadius: radius.full, overflow: 'hidden' }}>
             <Pressable

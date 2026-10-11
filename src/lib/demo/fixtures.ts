@@ -32,6 +32,8 @@ export interface DemoPane {
  */
 export interface DemoShellPane {
   paneId: string;
+  /** Its terminal, as the snapshot's `terminal_id`: what its terminal attaches by. */
+  terminalId: string;
   cwd: string;
 }
 
@@ -103,7 +105,7 @@ export const DEMO_WORKSPACES: readonly DemoWorkspace[] = [
     title: 'Archived projects migration',
     morePanes: [{ paneId: 'w6:p2', cwd: '/home/demo/api/web', agentStatus: 'working', title: 'Save button wrap' }],
     // A shell beside the two agents: the terminal row, and its recorded screen.
-    shellPanes: [{ paneId: 'w6:p3', cwd: '/home/demo/api' }],
+    shellPanes: [{ paneId: 'w6:p3', terminalId: 'term_w6_p3', cwd: '/home/demo/api' }],
   },
 ];
 
