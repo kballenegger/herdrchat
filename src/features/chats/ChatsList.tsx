@@ -527,6 +527,7 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId }: {
                       connectionId: summary.connectionId,
                       paneId: terminal.paneId,
                       kind: paneKind(terminal.pane.agent),
+                      terminalId: terminal.pane.terminalId ?? '',
                       title: terminalContext(terminal.pane, terminal.processName),
                     });
                   }}
