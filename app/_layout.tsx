@@ -183,6 +183,13 @@ function RootStack() {
           name="rename-chat"
           options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents' }}
         />
+        {/* A workspace's layout on a phone, sized to its tabs like the rename
+            sheet. iPad shows the same drawing as a card beside the layout
+            button instead (`SpaceLayoutPopover`). */}
+        <Stack.Screen
+          name="space-layout"
+          options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents' }}
+        />
       </Stack>
     </ThemeProvider>
   );
