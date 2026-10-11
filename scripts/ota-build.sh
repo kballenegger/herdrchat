@@ -60,8 +60,16 @@ for name in $DEVICES; do
     failed="$failed $name"; continue
   fi
   echo "==> Installing on $name ($udid)"
-  # One device off the network must not cost the other its install.
-  xcrun devicectl device install app --device "$udid" "$APP" >/dev/null 2>&1 || failed="$failed $name"
+  # One device off the network must not cost the other its install. The
+  # tunnel to a device drops transiently ("Failed to allocate RSD device",
+  # "Connection interrupted", error 3002): a second try 20 s later has
+  # worked every time it was tried by hand, so the script tries three times.
+  installed=
+  for attempt in 1 2 3; do
+    if xcrun devicectl device install app --device "$udid" "$APP" >/dev/null 2>&1; then installed=1; break; fi
+    [ "$attempt" = 3 ] || { echo "    attempt $attempt failed; retrying in 20 s" >&2; sleep 20; }
+  done
+  [ -n "$installed" ] || failed="$failed $name"
 done
 if [ -n "$failed" ]; then
   echo "Not installed on:$failed" >&2
