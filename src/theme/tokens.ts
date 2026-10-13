@@ -156,6 +156,12 @@ export const size = {
    * folds rather than taking several screens.
    */
   shellOutputLines: 16,
+  /**
+   * How much of a permission prompt's command or diff the blocked bar shows
+   * before folding it behind "Show all N lines". The bar sits over the thread
+   * above the composer; past this it would push the choices off a phone.
+   */
+  blockedBodyLines: 8,
   /** The pin and muted marks beside a chat row's title. */
   rowBadgeGlyph: 12,
   /**
