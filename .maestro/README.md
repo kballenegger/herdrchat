@@ -17,7 +17,7 @@ where regressions are found.
 | `regression/welcome` | the four welcome pages (Next and a swipe), the setup guide link, the star card, closing on the Demo, and its two Settings rows |
 | `regression/thread` | the row and the header titled by the Claude session with the workspace below, effort in the header, a folded tool run with a failure, a two-part question advancing without reopening the chat, hiding the keyboard, the `/` palette, the `/model` panel with "this session only", the `/effort` slider, a Bash permission prompt showing its tool, description, command, warning and auto-deny time above the question (`blocked-details` screenshot) |
 | `regression/keyboard` | pulling the conversation down takes the keyboard with it and the composer stays above the keys and the home indicator (two screenshots to open) |
-| `regression/composer-keys` | Return sends from the composer; with Settings > "Return sends" off, Return keeps the draft and sends nothing; the setting put back |
+| `regression/composer-keys` | the software keyboard's Return in the composer starts a new line and sends nothing, with Settings > "Return sends" on and off; the setting put back. Hardware Return, Shift-Return, Option-Return and Command-Return are key commands Maestro cannot press: jest covers them (`composerKeys.test.ts`, `Composer.test.tsx`) and the hand checks below |
 | `regression/menu` | the Chats menu: its rows, Settings, Hosts and New chat each opening as a sheet and Done landing back on the same list, and a cold `herdrchat://settings` link whose Done lands on the chats (screenshot `menu-<appearance>` with the menu open) |
 | `regression/list-modes` | the chats title as a picker: Agents listing each agent as a row of its own (`chat-row-w2` for the one-agent w2, `chat-row-w6:p1` and `chat-row-w6:p2` for w6's two, by `agentTestKey`), titled by its session with its workspace on its line, a row opening that agent's own thread, and no terminal row (`terminal-row-w6:p3`) among them, and Spaces bringing back w6's card with its two agents and its shell pane's terminal row under it; `scripts/e2e.sh` clears the saved choice around it (screenshots `list-agents-<appearance>`, `list-spaces-<appearance>`) |
 | `regression/host-editor-keyboard` | the host editor's private key field reachable and typed into with the keyboard up (open the screenshot: the field must sit above the keys) |
@@ -42,17 +42,21 @@ The shell block against a real Claude Code, checked by hand on a phone
 - `! sleep 3; echo done`: "Running" until `done` lands.
 
 Maestro cannot press hardware-keyboard key commands, so these are checked by
-hand on an iPad with a keyboard, after a native build:
+hand on an iPad (or an iPhone) with a keyboard, after a native build:
 
-- Shift-Return starts a new line, also over a selection, and right after
-  picking a `/` command from the suggestions (the newline goes at the end, not
-  where the caret was before the pick) and after a send.
+- Return sends with "Return sends" on.
+- Shift-Return and Option-Return each start a new line, also over a selection,
+  and right after picking a `/` command from the suggestions (the newline goes
+  at the end, not where the caret was before the pick) and after a send.
 - Command-Return sends, with "Return sends" on and off.
-- With "Return sends" off, Return and Shift-Return both start a new line.
+- With "Return sends" off, Return, Shift-Return and Option-Return all start a
+  new line.
 - Return on an empty draft, or while a send is in flight, does nothing and
   keeps the draft.
 - Return that commits a Chinese or Japanese candidate commits it and does not
   send.
+- With a Japanese keyboard mid-composition (underlined candidate showing),
+  Shift-Return does not send and does not break the line under the candidate.
 - Command-V with a copied picture attaches it. Expect the system "Allow Paste"
   prompt unless Settings > HerdrChat > Paste from Other Apps is Allow; the
   attach menu's "Paste Picture" asks the same.
@@ -61,10 +65,9 @@ hand on an iPad with a keyboard, after a native build:
   pastes the text.
 - At four pictures, Command-V with a picture does nothing new.
 
-On an iPhone, with no hardware keyboard: the keyboard's Return key reads Send
-with the setting on and return with it off, also after flipping the setting
-while the composer was focused; with it on, Return sends and there is no way to
-type a newline but turning the setting off, as its footnote says.
+On an iPhone or an Android phone, with no hardware keyboard: the keyboard's
+Return key reads return and starts a new line, with the setting on and off; it
+never sends. On Android, Settings has no "Return sends" row.
 
 ### Terminal, by hand on a device
 
