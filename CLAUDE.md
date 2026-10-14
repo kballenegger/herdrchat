@@ -33,6 +33,8 @@ modules/herdr-ssh/      the SSH TurboModule (see its README)
 modules/herdr-keys/     iOS only: Command-Return on the composer, Esc on the
                         iPad's layout card (UIKeyCommand views), and pointer
                         hover (Pressable's onHoverIn never fires on iOS here)
+modules/herdr-terminal/ iOS only: a pane's terminal, SwiftTerm in a native view (see its README)
+modules/herdr-shell-registry/  the open terminal shells, shared by herdr-ssh and herdr-terminal
 relay/                  the push relay, a Cloudflare Worker (see RELEASING.md)
                         (the SwiftUI and Compose apps this replaced are not in
                          the tree — they live in git history before the rewrite)

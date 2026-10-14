@@ -12,14 +12,16 @@ import { rowKey, type ListedChat } from './listedChat';
  * under its card, after its agents, and they open the pane's terminal.
  * Agents lists agents: a shell is not one, and its row would sit under no
  * card (an agent row carries no `shellPanes`, see `agentRows`).
+ * Neither has terminal rows where no terminal can open (`terminalAvailable`).
  */
 export function chatListRows(
   mode: ListMode,
   summaries: readonly ListedChat[],
   query: string,
-  pinnedAt: ReadonlyMap<string, number>
+  pinnedAt: ReadonlyMap<string, number>,
+  terminalAvailable: boolean
 ): ListItemWithTerminals<ListedChat>[] {
   return mode === 'agents'
     ? groupChats(agentRows(summaries), query, pinnedAt, agentRowKey)
-    : withTerminalRows(groupChats(summaries, query, pinnedAt, rowKey));
+    : withTerminalRows(groupChats(summaries, query, pinnedAt, rowKey), terminalAvailable);
 }

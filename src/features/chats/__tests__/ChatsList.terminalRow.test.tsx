@@ -53,6 +53,8 @@ jest.mock('@/state/connections', () => ({
   loadHostKeyPin: () => Promise.resolve(null),
   newConnection: () => ({ id: 'new' }),
 }));
+// Jest has no native terminal view: without this the terminal rows are not listed.
+jest.mock('../../../../modules/herdr-terminal/src', () => ({ isTerminalAvailable: true }));
 jest.mock('@/state/db', () => ({ loadThreadReads: () => Promise.resolve(new Map()), setSetting: jest.fn() }));
 jest.mock('@/features/chats/useHostChats', () => ({ useHostChats: () => mockChats }));
 jest.mock('@/features/chats/useOutdatedIntegrations', () => ({

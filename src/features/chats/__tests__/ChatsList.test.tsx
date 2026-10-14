@@ -65,6 +65,14 @@ jest.mock('@/state/connections', () => ({
   loadHostKeyPin: async () => null,
   newConnection: () => ({ id: 'new' }),
 }));
+// Jest has no native terminal view, so `isTerminalAvailable` is false
+// unless a test says otherwise: the Spaces terminal rows need it true.
+let mockTerminalAvailable = true;
+jest.mock('../../../../modules/herdr-terminal/src', () => ({
+  get isTerminalAvailable() {
+    return mockTerminalAvailable;
+  },
+}));
 jest.mock('@/state/db', () => ({ loadThreadReads: async () => new Map(), setSetting: async () => undefined }));
 jest.mock('@/state/saveSetting', () => ({ saveSetting: jest.fn() }));
 const mockSettings = { listMode: 'spaces', seenSwipeHint: true, starAsked: true, activeDays: '', pollScale: 1 };
@@ -108,6 +116,7 @@ beforeEach(() => {
   mockPush.mockClear();
   mockOpenChat.mockClear();
   mockPinned = [];
+  mockTerminalAvailable = true;
   useChatSelection.setState({ detail: null });
 });
 
@@ -123,6 +132,17 @@ it("draws w6 as the workspace, its agents and terminals under it", async () => {
   expect(screen.getByTestId('pane-row-w6:p2')).toBeOnTheScreen();
   expect(screen.getByTestId('terminal-row-w6:p3')).toBeOnTheScreen();
   expect(screen.getByTestId('terminal-row-w6:p4')).toBeOnTheScreen();
+});
+
+// Android has no terminal: its rows would only open the screen saying so.
+// Without them w6's agents share one tab, so there is nothing to divide.
+it('lists no terminal rows where no terminal can open', async () => {
+  mockTerminalAvailable = false;
+  const screen = await render(<ChatsList />);
+  expect(screen.queryAllByTestId(/^terminal-row-/)).toEqual([]);
+  expect(screen.getByTestId('pane-row-w6:p1')).toBeOnTheScreen();
+  expect(screen.getByTestId('pane-row-w6:p2')).toBeOnTheScreen();
+  expect(screen.queryAllByTestId(/^tab-(header|divider)-w6:/)).toEqual([]);
 });
 
 // "When there are multiple tabs in a space, the space children list should be
