@@ -82,6 +82,12 @@ export type SshFailureCode =
   | 'machine_auth_failed'
   /** The host's own ssh does not trust a machine's host key. Raised in TypeScript (`withMachine`). */
   | 'machine_host_key'
+  /**
+   * The host stopped its own ssh to a machine at the command's deadline, before
+   * the native one could reset the host's connection. Raised in TypeScript
+   * (`withMachine`).
+   */
+  | 'machine_timeout'
   /** Input or a resize for a terminal shell that has already ended. */
   | 'shell_closed'
   /** Bytes for a terminal shell that were not valid base64. */
