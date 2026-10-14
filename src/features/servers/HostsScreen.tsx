@@ -11,6 +11,7 @@ import { Text } from '@/components/Text';
 import { Icon } from '@/components/Icon';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, screenPadding, spacing } from '@/theme/tokens';
+import { returnToChats } from '@/features/chats/navigation';
 import { getPushDeviceId } from '@/features/notifications/deviceId';
 import { isNamedSession } from '@/lib/herdr/session';
 import { deviceFileId, removePushToken } from '@/features/notifications/push';
@@ -24,6 +25,7 @@ import {
   useConnections,
   type ServerConnection,
 } from '@/state/connections';
+import { useBadge } from '@/state/badge';
 import { deleteConnection, setSetting } from '@/state/db';
 import { clearHostSettings } from '@/state/hostTheme';
 import { SELECTED_KEY } from '@/state/Hydrate';
@@ -43,16 +45,18 @@ export default function ServersScreen() {
   const select = useConnections((state) => state.select);
   const remove = useConnections((state) => state.remove);
   const insets = useSafeAreaInsets();
+  // The chats under this sheet still poll; their count keeps the one signal
+  // the tab bar's badge gave while you were away from them.
+  const waiting = useBadge((state) => state.count);
 
   const choose = async (connection: ServerConnection) => {
     select(connection.id);
     await setSetting(db, SELECTED_KEY, connection.id);
     // Straight back to the conversations on the host you just picked — choosing
-    // a server is always in service of reading its chats. `dismissTo`, not
-    // `back`: opened from Settings this is the second sheet of two, and both
-    // go, since the chats are what the pick was for. With the chats not in
-    // history (a cold link straight here) it replaces this sheet with them.
-    router.dismissTo('/');
+    // a server is always in service of reading its chats. Not `back`: opened
+    // from Settings this is the second sheet of two, and both go, since the
+    // chats are what the pick was for.
+    returnToChats();
   };
 
   const confirmDelete = (connection: ServerConnection) => {
@@ -102,6 +106,7 @@ export default function ServersScreen() {
       <Header
         title="Hosts"
         onClose={() => router.back()}
+        closeBadge={waiting}
         actionSymbol="plus"
         actionLabel="Add a host"
         onAction={() =>

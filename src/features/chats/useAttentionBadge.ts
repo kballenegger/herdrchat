@@ -5,8 +5,8 @@ import { openFor, readsOf, type ListedChat, type OpenChat, type ReadsByConnectio
 import { useBadge } from '@/state/badge';
 
 /**
- * Publish the attention count (see `src/state/badge.ts`; nothing reads it since
- * the tab bar and its badge went away).
+ * Publish the attention count (see `src/state/badge.ts`), which the sheets
+ * above the chats show beside their Done.
  *
  * Computed here because the number is already in hand — the alternative is a
  * second poll wherever it is shown, which would double every host's SSH

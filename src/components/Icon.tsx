@@ -52,6 +52,9 @@ const MATERIAL = {
   'desktopcomputer': ['computer', 0xe30a],
   'doc.on.clipboard': ['content_paste', 0xe14f],
   'doc.text': ['description', 0xe873],
+  // The menu's glyph on Android: Material's overflow is three dots stacked.
+  'ellipsis': ['more_vert', 0xe5d4],
+  // A chat working (its row's status mark), and the menu on iOS.
   'ellipsis.circle': ['pending', 0xef64],
   // A bubble with "!", not `chat_error`, which is a bubble with an X: the bar
   // asks a question, nothing failed.
