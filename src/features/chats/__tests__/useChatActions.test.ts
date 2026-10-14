@@ -98,3 +98,13 @@ it('runs a machine row\'s close and rename on the machine', async () => {
     params: { workspaceId: 'w2', title: 'Notes', connectionId: 'demo/demo-nuku' },
   });
 });
+
+// Rename renames the workspace, whose label a row titled by its session no
+// longer shows, so the menu says which name it changes and prefills that one.
+it('offers to rename the workspace, prefilled with its label', async () => {
+  const titled: ChatSummary = { ...summary, sessionTitle: 'Release notes summary' };
+  const { result } = await renderHook(() => useChatActions({ client, connectionId: 'demo', db, refresh: jest.fn() }));
+  await act(() => result.current.manageChat(titled));
+  const labels = jest.mocked(showActionSheet).mock.calls[0]?.[0].actions.map((action) => action.label);
+  expect(labels).toEqual(['Rename workspace…', 'Close chat']);
+});

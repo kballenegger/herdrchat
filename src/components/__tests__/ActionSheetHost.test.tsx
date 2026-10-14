@@ -39,7 +39,7 @@ function chatSheet(handlers: Record<string, jest.Mock>) {
       { label: 'Pin', onPress: handlers.pin! },
       { label: 'Mute notifications', onPress: handlers.mute! },
       { label: 'Close chat', destructive: true, onPress: handlers.close! },
-      { label: 'Rename…', onPress: handlers.rename! },
+      { label: 'Rename workspace…', onPress: handlers.rename! },
     ],
   });
 }
@@ -52,13 +52,13 @@ it('shows every action and Cancel, destructive below the safe ones', async () =>
   const screen = await render(<ActionSheetHost />);
   await act(async () => chatSheet(handlers));
 
-  const labels = ['Pin', 'Mute notifications', 'Rename…', 'Close chat', 'Cancel'];
+  const labels = ['Pin', 'Mute notifications', 'Rename workspace…', 'Close chat', 'Cancel'];
   for (const label of labels) expect(screen.getByText(label)).toBeOnTheScreen();
   expect(screen.getByTestId('action-sheet-option-3')).toHaveProp('accessibilityLabel', 'Close chat');
   expect(screen.getByTestId('action-sheet-cancel')).toBeOnTheScreen();
 });
 
-// As on iOS: Rename… opens a sheet of its own, which must not come up under
+// As on iOS: Rename workspace… opens a sheet of its own, which must not come up under
 // this one still leaving.
 it('runs the chosen action once, after the sheet has gone', async () => {
   let openWhenRun: unknown = 'not run';
@@ -73,7 +73,7 @@ it('runs the chosen action once, after the sheet has gone', async () => {
   const screen = await render(<ActionSheetHost />);
   await act(async () => chatSheet(handlers));
 
-  await fireEvent.press(screen.getByText('Rename…'));
+  await fireEvent.press(screen.getByText('Rename workspace…'));
   await settle();
 
   expect(handlers.rename).toHaveBeenCalledTimes(1);

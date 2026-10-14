@@ -36,7 +36,7 @@ import { minTouchTarget, motion, radius, sheet as sheetSize, size, spacing } fro
  * asks to confirm) never stacks one on another.
  *
  * An overlay above the navigator, not a `Modal`. A Modal is a window of its
- * own, and closing it hands focus back to the app a beat later: Rename… opened
+ * own, and closing it hands focus back to the app a beat later: Rename workspace… opened
  * its sheet in that beat, and the name field's autofocus went to a window that
  * no longer had focus, so no keyboard came up.
  */
