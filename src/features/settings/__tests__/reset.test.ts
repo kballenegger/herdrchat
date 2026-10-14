@@ -46,7 +46,7 @@ it('erases each host’s theme and machines, in the table and on screen', async 
   });
   useHostMachines.getState().set('demo', [{ id: 'demo-nuku', label: 'nuku', target: 'nuku', session: 'default', enabled: true }]);
   const theme = resolveHostTheme(
-    { kind: 'present', mtime: 1, text: '{"accent":"#B5562F"}' },
+    { kind: 'present', version: '1 1', text: '{"accent":"#B5562F"}' },
     { light: lightPalette, dark: darkPalette }
   );
   useHostTheme.getState().set('demo', theme);
