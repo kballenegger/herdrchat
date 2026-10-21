@@ -35,7 +35,8 @@ udid_of() {
   xcrun devicectl list devices 2>/dev/null | awk -v n="$1" '$1 == n { print $2 }'
 }
 reachable() {
-  xcrun devicectl list devices 2>/dev/null | awk -v n="$1" '$1 == n' | grep -q 'available'
+  # The state column reads "available" or "unavailable", so match the word.
+  xcrun devicectl list devices 2>/dev/null | awk -v n="$1" '$1 == n && $4 == "available"' | grep -q .
 }
 
 if [ -z "$install_only" ]; then
