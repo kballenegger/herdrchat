@@ -3,7 +3,13 @@
 ## The regression suite
 
 `npm run e2e` runs `scripts/e2e.sh`: the flows under `regression/` plus the
-Demo flows below, each in dark and light, against the built-in Demo host. The
+Demo flows below, against the built-in Demo host, split over two simulators
+(the script makes the second from the booted one). Most run in Dark only; the
+screens looked at most (`BOTH_THEMES` in the script) run in Light too, and
+`E2E_APPEARANCES="Dark Light"` runs everything in both. `npm run e2e -- changed`
+runs only the flows the uncommitted changes can reach (`flows_for` in the
+script), and `E2E_DRY_RUN=1` lists the runs without starting any. A run is
+killed after eight minutes and a failed one is tried once more. The
 E2E workflow runs the same script on demand with a Release build
 (`gh workflow run e2e.yml --ref <branch>`); it is slow, so the local run is the gate.
 Every fix and feature adds a flow here (or a jest test), so a phone is not
@@ -25,6 +31,7 @@ where regressions are found.
 | `regression/host-editor-keyboard` | the host editor's private key field reachable and typed into with the keyboard up (open the screenshot: the field must sit above the keys) |
 | `regression/folder-trust` | Claude's folder-trust question on a first start: shown with the folder, no numbers, answered with the arrows, the reply after it |
 | `regression/multi-agent` | a workspace with two agents: a row for each under it titled by its session, a thread with only that agent's lines, titled by its session, with the workspace and its name in the header, a reply landing on that agent's row alone, unread kept per agent |
+| `regression/headsup` | the Heads Up mod's list: no bar on the Demo until its agent sets Heads Up up ("set up heads up"), then after a pull the chats' bar with `⚑ 1 blocking · 5 need you · …`, the screen grouped questions, follow-ups, failures, notes, the notes chat's question offering Reply and Go and billing's (a session not running here) only ✓, a note ticked off and the failure closed with the counts dropping, Go opening the notes chat whose bar shows the blocking question and the follow-up, and Answer putting `Re: "…" [demohu1q]` in the composer (screenshots `headsup-bar-<appearance>`, `headsup-list-<appearance>`, `headsup-chat-<appearance>`: the blocking count and question in the attention colour) |
 | `regression/host-theme` | a host's `~/.herdrchat/theme.json`: Settings says Default, the Demo agent writes a theme, Reload theme names it, Reset to default puts the app back on its own colours |
 | `regression/subagents` | a subagent's card in the thread running, then done; its chevron opening the agent's own transcript, read only, with its type and its answer; the review workflow's card opening its run with both phases and an agent still running; a workflow agent opening its transcript (screenshots `subagent-running`, `subagent-thread`, `workflow`) |
 | `regression/slash-commands` | the `/` palette from the Demo's catalogue: Built-in and Skills sections, a built-in's hint (`/model [model]`), the hidden built-in left out, narrowing to one headerless ranked list (`/release-notes`, then `/review`), `/review` (optional `[pr]`) sent at once and answered, `/add-dir` filling in with its required `<path>` hint after it until something is typed, `/compact` (it rewrites the conversation) only filled from a fresh `/`, then sent by hand with its note in the thread, the notes folder's own `/notes:summarise` (screenshots `slash-palette-<appearance>`, `slash-filled-<appearance>`: the hint must start right after the caret) |
@@ -65,10 +72,13 @@ hand on an iPad (or an iPhone) with a keyboard, after a native build:
 - Command-V with a picture and text both on the pasteboard (a copied web page)
   pastes the text.
 - At four pictures, Command-V with a picture does nothing new.
+- On Android with a hardware keyboard, the same list with Enter for Return,
+  Ctrl-Enter for Command-Return, Alt-Enter for Option-Return and Ctrl-V for
+  Command-V (Android asks no "Allow Paste").
 
 On an iPhone or an Android phone, with no hardware keyboard: the keyboard's
 Return key reads return and starts a new line, with the setting on and off; it
-never sends. On Android, Settings has no "Return sends" row.
+never sends.
 
 ### Terminal, by hand on a device
 
@@ -92,6 +102,13 @@ herdr open on the desktop as well, check each of these and what it should do:
   (expected "Ended", or "Ended with exit N"). Reconnect on the iPad is then
   refused, with Take over offered, until the phone leaves; after that it
   attaches again.
+- **Android.** On an Android phone, open a shell pane's and an agent pane's
+  terminal: both draw in the app's colours; the first tap brings up the
+  keyboard and typing reaches the pane (Return, Delete, the bar's Esc, Tab,
+  arrows and sticky Ctrl: Ctrl then `c` stops a running command); a swipe up
+  scrolls the pane's history in herdr rather than selecting; a pinch changes
+  the font size and the pane follows; Paste on the bar pastes. A login shell
+  from the Computers tab opens without a MOTD in front of it.
 - **Locked or backgrounded while attached.** Attach a shell pane's terminal,
   then lock the phone (or go to the home screen). On the desktop the pane gets
   its own size back within a second or two. Unlock: the terminal says "Hung
