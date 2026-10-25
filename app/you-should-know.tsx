@@ -1,2 +1,2 @@
 // The screen lives with its feature; a route file only names where it is.
-export { default } from '@/features/headsup/HeadsUpScreen';
+export { default } from '@/features/youShouldKnow/NotesScreen';

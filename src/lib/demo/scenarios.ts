@@ -4,8 +4,8 @@
  * They exist so every feature has a host to run against without SSH: a slash
  * command's panel, a question asked in several parts, a run of tool calls with
  * one failure, the folder-trust question a first start asks, a reply with a
- * table, an agent restyling the app through the host's theme file, the
- * Heads Up mod's list appearing on the host, a
+ * table, an agent restyling the app through the host's theme file, a
+ * "You should know" note offered on the host, a
  * subagent handed the review (its files in
  * subagents.ts), a `!` line run in the agent's shell. The UI tests drive the
  * Demo with the phrases below, and anyone
@@ -21,7 +21,7 @@ export const DEMO_PHRASES = {
   trust: 'open a new folder',
   table: 'compare the options',
   theme: 'restyle the app',
-  headsUp: 'set up heads up',
+  note: 'show me a note',
   delegate: 'delegate the review',
 } as const;
 
@@ -237,64 +237,74 @@ export const DEMO_THEME_REPLY = [
   'The app picks it up the next time its chat list is on screen (it checks about every 10 seconds there), or right away from Settings > Appearance > Reload theme.',
 ].join('\n');
 
-// MARK: - Heads Up
+// MARK: - You should know
 
 /**
- * Where the demo's Heads Up store is: Claude Code's plugin store, under the
- * name the mod's plugin and marketplace give it.
+ * Where the demo's "You should know" store is: Claude Code's plugin store,
+ * under the name the built-in plugin and its marketplace give it.
  */
-export const DEMO_HEADSUP_PATH = '/home/demo/.claude/plugins/store/headsup_heads-up-claude-mod-5d41402abc4b.json';
+export const DEMO_YSK_PATH = '/home/demo/.claude/plugins/store/cc-plugin-you-should-know_builtin-19776595df2c.json';
 
-/** The session the "billing" items come from: a Claude Code session no demo chat runs. */
-export const DEMO_HEADSUP_ELSEWHERE = '9c1e44aa-0b7d-4e6f-9a21-3c5d7e8f9a0b';
+/** The Claude session the second note is for: one no demo chat runs, as another session on the computer. */
+export const DEMO_YSK_ELSEWHERE = '9c1e44aa-0b7d-4e6f-9a21-3c5d7e8f9a0b';
+
+/** The demo chat's note: a Heads up offered with its explanation. */
+export const DEMO_YSK_LINE = 'The release notes were written from the merged pull requests only, so fixes pushed straight to main are missing.';
+export const DEMO_YSK_EXPLANATION = [
+  '**Some fixes are not in the notes**',
+  '- The summary lists what was merged through pull requests since the last tag.',
+  '- Two fixes went straight to main without one, so they are in the release but not in the notes.',
+].join('\n');
+
+/** The other session's note, already explained. */
+export const DEMO_YSK_OTHER_LINE = 'Invoice totals are rounded per line, so a long invoice can be a few cents off its PDF.';
+export const DEMO_YSK_OTHER_TEXT = [
+  '**Rounding per line adds up**',
+  'Each line is rounded to the cent before the lines are added, while the PDF rounds the total once.',
+  '',
+  'A 40-line invoice can differ by up to 20 cents.',
+].join('\n');
+
+/** A key the plugin may add that this app does not know: every write must keep it. */
+export const DEMO_YSK_UNKNOWN_KEY = 'futureSetting';
 
 /**
- * The list the demo's Heads Up holds once it is set up (`DEMO_PHRASES.headsUp`):
- * one of each thing the mod logs, from the chat that set it up and from a
- * "billing" session that is not running here. A blocking question and a
- * follow-up from the chat itself, so its own bar shows them; a question with
- * a detail from billing, which can be cleared but not answered from the phone;
- * a failed tool call; a note. And one item of a kind this app does not know,
- * plus a key it does not know, which it must leave as they are.
+ * The store once the demo's agent has a note to offer (`DEMO_PHRASES.note`):
+ * a Heads up for the chat that asked, with its explanation, so Learn more and
+ * Discuss in chat have something to show; a "You should know" already
+ * explained for a session no chat runs; and a row showing nothing. Plus the
+ * plugin's other keys, the back-off counters a write resets, and a key this
+ * app does not know, which a write must leave as it is.
  */
-export function demoHeadsUpStore(chat: { sessionId: string; folder: string }, now: number): Record<string, unknown> {
+export function demoYskStore(chatSessionId: string, now: number): Record<string, unknown> {
   const minutes = 60_000;
-  const here = { session: chat.sessionId.slice(0, 8), sessionId: chat.sessionId, folder: chat.folder };
   return {
-    items: [
+    sessions: [
       {
-        id: 'demohu1q', kind: 'question', blocking: true, status: 'open', createdAt: now - 4 * minutes, ...here,
-        text: 'Publish the release notes, or keep them as a draft?',
-        detail: 'The summary is written and checked. Publishing pushes it to the site; a draft stays in notes/ for you to read first.',
+        id: chatSessionId,
+        tag: 'Heads up',
+        askedTurn: 6,
+        offeredTurn: 6,
+        view: { kind: 'offer', line: DEMO_YSK_LINE, explanation: DEMO_YSK_EXPLANATION, shownAt: now - 2 * minutes, promptsSurvived: 0 },
       },
       {
-        id: 'demohu2q', kind: 'question', status: 'open', createdAt: now - 52 * minutes,
-        session: DEMO_HEADSUP_ELSEWHERE.slice(0, 8), sessionId: DEMO_HEADSUP_ELSEWHERE, folder: 'billing',
-        text: 'Round invoice totals to the cent or to the dollar?',
-        detail: 'The export rounds per line today, so a 40-line invoice can be off by up to 20 cents from the PDF.',
+        id: DEMO_YSK_ELSEWHERE,
+        tag: 'You should know',
+        checks: 3,
+        view: { kind: 'explained', line: DEMO_YSK_OTHER_LINE, text: DEMO_YSK_OTHER_TEXT, iteration: 1, shownAt: now - 40 * minutes },
       },
-      {
-        id: 'demohu3f', kind: 'followup', status: 'open', createdAt: now - 18 * minutes, ...here,
-        text: 'Tag the release on GitHub',
-        detail: "I can't push tags from this machine.",
-      },
-      {
-        id: 'demohu4x', kind: 'failure', status: 'open', createdAt: now - 31 * minutes, ...here,
-        fingerprint: 'Bash:npm test',
-        text: 'npm test failed: 2 tests in parser.test.ts',
-      },
-      {
-        id: 'demohu5n', kind: 'note', status: 'open', createdAt: now - 3 * 60 * minutes, ...here,
-        text: 'Check the March numbers with finance',
-      },
-      { id: 'demohu6r', kind: 'reminder', status: 'open', createdAt: now - 5 * minutes, ...here, text: 'A kind from a newer mod' },
+      { id: '0d3c2b1a-9f8e-4d7c-8b6a-5f4e3d2c1b0a', checked: 12 },
     ],
-    lastPrunedAt: now - 60 * minutes,
+    seen: [DEMO_YSK_OTHER_LINE, DEMO_YSK_LINE],
+    known: [],
+    typedPastInARow: 3,
+    looksToSkip: 2,
+    [DEMO_YSK_UNKNOWN_KEY]: { kept: true },
   };
 }
 
-export const DEMO_HEADSUP_REPLY = [
-  'Done. Heads Up is set up on this computer: its list has a question I need answered before I go on, a follow-up for you, a failed test run and your note, plus a question from the billing session.',
+export const DEMO_YSK_REPLY = [
+  'Done. "You should know" has a note for you about these release notes, and another session on this computer has one too.',
   '',
   'Pull down on the chat list to have the app look for it now; it otherwise looks every ten minutes.',
 ].join('\n');

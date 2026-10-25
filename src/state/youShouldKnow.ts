@@ -1,34 +1,34 @@
 import { create } from 'zustand';
 
 import type { HerdrTransport } from '@/lib/herdr/transport';
-import { changeHeadsUp, detectHeadsUp, headsUpDetectDue, readHeadsUp, type HeldStore } from '@/lib/headsup/client';
-import { parseHeadsUpFile, type HeadsUpChange, type HeadsUpChat, type HeadsUpFile } from '@/lib/headsup/items';
+import { changeYouShouldKnow, detectYouShouldKnow, yskDetectDue, readYouShouldKnow, type HeldStore } from '@/lib/youShouldKnow/client';
+import { parseYskFile, type YskChange, type NoteChat, type YskFile } from '@/lib/youShouldKnow/notes';
 
 /**
- * What each host's Heads Up store says, as the app last read it. Nothing here
- * is persisted: the list lives on the host, and a launch reads it again.
+ * What each host's "You should know" store says, as the app last read it.
+ * Nothing here is persisted: the notes live on the host, and a launch reads it again.
  *
  * A host with no entry has not been looked at; one whose `path` is null was
- * looked at and has no Heads Up, and nothing anywhere shows for it.
+ * looked at and has no "You should know", and nothing anywhere shows for it.
  */
-export interface HostHeadsUp {
-  /** The store file detection found, or null: this host has no Heads Up. */
+export interface HostNotes {
+  /** The store file detection found, or null: this host has no "You should know". */
   path: string | null;
   /** When detection last answered, for its ten-minute cadence. */
   detectedAt: number | null;
   /** The file's version as last read, sent with the next read and every write. */
   version: string | null;
   /** The file as last read; null when there is none to show (unreadable, too large). */
-  file: HeadsUpFile | null;
-  /** The host's chats that run a Claude session, for finding the one that raised an item. */
-  chats: HeadsUpChat[];
+  file: YskFile | null;
+  /** The host's chats that run a Claude session, for finding the one a note is for. */
+  chats: NoteChat[];
 }
 
-const EMPTY: HostHeadsUp = { path: null, detectedAt: null, version: null, file: null, chats: [] };
+const EMPTY: HostNotes = { path: null, detectedAt: null, version: null, file: null, chats: [] };
 
-interface HeadsUpState {
-  byConnection: Readonly<Record<string, HostHeadsUp>>;
-  update: (connectionId: string, change: (entry: HostHeadsUp) => HostHeadsUp) => void;
+interface YouShouldKnowState {
+  byConnection: Readonly<Record<string, HostNotes>>;
+  update: (connectionId: string, change: (entry: HostNotes) => HostNotes) => void;
   clear: (connectionId: string) => void;
 }
 
@@ -36,7 +36,7 @@ interface HeadsUpState {
 const generations = new Map<string, number>();
 const generationOf = (connectionId: string) => generations.get(connectionId) ?? 0;
 
-export const useHeadsUp = create<HeadsUpState>((setState) => ({
+export const useYouShouldKnow = create<YouShouldKnowState>((setState) => ({
   byConnection: {},
   update: (connectionId, change) =>
     setState((state) => {
@@ -55,25 +55,25 @@ export const useHeadsUp = create<HeadsUpState>((setState) => ({
 }));
 
 /** The entry for a host, or the empty one. */
-export function headsUpOf(connectionId: string): HostHeadsUp {
-  return useHeadsUp.getState().byConnection[connectionId] ?? EMPTY;
+export function notesOf(connectionId: string): HostNotes {
+  return useYouShouldKnow.getState().byConnection[connectionId] ?? EMPTY;
 }
 
-const sameChats = (a: readonly HeadsUpChat[], b: readonly HeadsUpChat[]) =>
+const sameChats = (a: readonly NoteChat[], b: readonly NoteChat[]) =>
   a.length === b.length &&
   a.every((chat, index) => {
     const other = b[index];
     return other !== undefined && chat.sessionId === other.sessionId && chat.workspaceId === other.workspaceId && chat.paneId === other.paneId &&
-      chat.soleAgent === other.soleAgent;
+      chat.soleAgent === other.soleAgent && chat.title === other.title;
   });
 
 /** What the chat list's poll saw running on a host. Changes nothing when it is what was held. */
-export function setHeadsUpChats(connectionId: string, chats: HeadsUpChat[]): void {
-  useHeadsUp.getState().update(connectionId, (entry) => (sameChats(entry.chats, chats) ? entry : { ...entry, chats }));
+export function setNoteChats(connectionId: string, chats: NoteChat[]): void {
+  useYouShouldKnow.getState().update(connectionId, (entry) => (sameChats(entry.chats, chats) ? entry : { ...entry, chats }));
 }
 
 /** The store as a write needs it, or null when there is nothing to write to. */
-export function heldStore(entry: HostHeadsUp): HeldStore | null {
+export function heldStore(entry: HostNotes): HeldStore | null {
   return entry.path === null || entry.version === null || entry.file === null
     ? null
     : { path: entry.path, version: entry.version, file: entry.file };
@@ -93,7 +93,7 @@ const inFlight = new Map<string, { check: Promise<void>; detects: boolean }>();
  * refresh) while that check does not: it gets a check that looks, after the
  * running one, so the ask is never dropped.
  */
-export function checkHeadsUp(
+export function checkYouShouldKnow(
   connectionId: string,
   transport: HerdrTransport,
   { detect = false, now = Date.now() }: { detect?: boolean; now?: number } = {}
@@ -101,7 +101,7 @@ export function checkHeadsUp(
   const running = inFlight.get(connectionId);
   if (running !== undefined) {
     if (!detect || running.detects) return running.check;
-    return running.check.then(() => checkHeadsUp(connectionId, transport, { detect: true, now }));
+    return running.check.then(() => checkYouShouldKnow(connectionId, transport, { detect: true, now }));
   }
   const generation = generationOf(connectionId);
   const check: Promise<void> = runCheck(connectionId, transport, detect, now, generation)
@@ -115,12 +115,12 @@ export function checkHeadsUp(
 
 async function runCheck(connectionId: string, transport: HerdrTransport, detect: boolean, now: number, generation: number): Promise<void> {
   const live = () => generationOf(connectionId) === generation;
-  const update = (change: (entry: HostHeadsUp) => HostHeadsUp) => {
-    if (live()) useHeadsUp.getState().update(connectionId, change);
+  const update = (change: (entry: HostNotes) => HostNotes) => {
+    if (live()) useYouShouldKnow.getState().update(connectionId, change);
   };
-  let entry = headsUpOf(connectionId);
-  if (detect || headsUpDetectDue(entry.detectedAt, now)) {
-    const found = await detectHeadsUp(transport);
+  let entry = notesOf(connectionId);
+  if (detect || yskDetectDue(entry.detectedAt, now)) {
+    const found = await detectYouShouldKnow(transport);
     if (found !== null) {
       update((held) =>
         found.kind === 'none'
@@ -130,18 +130,18 @@ async function runCheck(connectionId: string, transport: HerdrTransport, detect:
             : { ...held, path: found.path, version: null, file: null, detectedAt: now }
       );
     }
-    entry = headsUpOf(connectionId);
+    entry = notesOf(connectionId);
   }
   const path = entry.path;
   const startVersion = entry.version;
   if (path === null || !live()) return;
-  const read = await readHeadsUp(transport, path, startVersion);
+  const read = await readYouShouldKnow(transport, path, startVersion);
   // A write that landed while the read was out holds a newer version than the
   // file the read saw: what the read says is already old, and dropped.
-  const current = (held: HostHeadsUp) => held.path === path && held.version === startVersion;
+  const current = (held: HostNotes) => held.path === path && held.version === startVersion;
   if (read === null || read.kind === 'unchanged') return;
   if (read.kind === 'missing') {
-    // Gone (the mod removed, or its store moved): looked for again on the next poll.
+    // Gone (the plugin's store removed, or moved): looked for again on the next poll.
     update((held) => (held.path === path ? { ...held, path: null, version: null, file: null, detectedAt: null } : held));
     return;
   }
@@ -149,7 +149,7 @@ async function runCheck(connectionId: string, transport: HerdrTransport, detect:
     update((held) => (current(held) ? { ...held, version: read.version, file: null } : held));
     return;
   }
-  const file = parseHeadsUpFile(read.text);
+  const file = parseYskFile(read.text);
   // Not JSON (a write caught halfway): keep what was held and read it again next time.
   if (file === null) return;
   update((held) => (current(held) ? { ...held, version: read.version, file } : held));
@@ -159,7 +159,7 @@ async function runCheck(connectionId: string, transport: HerdrTransport, detect:
 
 /**
  * What a change to a host's store came to: `changed`, written by this call;
- * `unchanged`, nothing to write (the item was already as asked, or gone);
+ * `unchanged`, nothing to write (the note is gone, or the terminal moved it on);
  * `failed`, not written, which the caller says.
  */
 export type HostChange = 'changed' | 'unchanged' | 'failed';
@@ -168,19 +168,19 @@ export type HostChange = 'changed' | 'unchanged' | 'failed';
 const writing = new Map<string, Promise<HostChange>>();
 
 /**
- * Apply a change to a host's store (`changeHeadsUp`: compare-and-swap, one
+ * Apply a change to a host's store (`changeYouShouldKnow`: compare-and-swap, one
  * retry), and hold the store as it then is.
  */
-export function changeHostHeadsUp(connectionId: string, transport: HerdrTransport, change: HeadsUpChange): Promise<HostChange> {
+export function changeHostNotes(connectionId: string, transport: HerdrTransport, change: YskChange): Promise<HostChange> {
   const before = writing.get(connectionId) ?? Promise.resolve<HostChange>('unchanged');
   const next = before.catch(() => 'failed' as const).then(async (): Promise<HostChange> => {
     const generation = generationOf(connectionId);
-    const held = heldStore(headsUpOf(connectionId));
+    const held = heldStore(notesOf(connectionId));
     if (held === null) return 'failed';
-    const result = await changeHeadsUp(transport, held, change);
+    const result = await changeYouShouldKnow(transport, held, change);
     const after = result.held;
     if (after !== null && generationOf(connectionId) === generation) {
-      useHeadsUp.getState().update(connectionId, (entry) =>
+      useYouShouldKnow.getState().update(connectionId, (entry) =>
         entry.path === after.path ? { ...entry, version: after.version, file: after.file } : entry
       );
     }
@@ -194,9 +194,9 @@ export function changeHostHeadsUp(connectionId: string, transport: HerdrTranspor
 }
 
 /** For tests: forget everything, as a relaunch would. */
-export function resetHeadsUpSession(): void {
+export function resetYouShouldKnowSession(): void {
   generations.clear();
   inFlight.clear();
   writing.clear();
-  useHeadsUp.setState({ byConnection: {} });
+  useYouShouldKnow.setState({ byConnection: {} });
 }

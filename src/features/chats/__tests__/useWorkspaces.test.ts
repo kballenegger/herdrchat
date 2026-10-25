@@ -36,10 +36,10 @@ const mockCheckTheme = jest.fn(async (_connectionId: string, _transport: unknown
 jest.mock('@/state/hostTheme', () => ({
   checkHostTheme: (connectionId: string, transport: unknown) => mockCheckTheme(connectionId, transport),
 }));
-const mockCheckHeadsUp = jest.fn(async (_connectionId: string, _transport: unknown, _ask: unknown) => undefined);
-jest.mock('@/state/headsUp', () => ({
-  checkHeadsUp: (connectionId: string, transport: unknown, ask: unknown) => mockCheckHeadsUp(connectionId, transport, ask),
-  setHeadsUpChats: () => undefined,
+const mockCheckNotes = jest.fn(async (_connectionId: string, _transport: unknown, _ask: unknown) => undefined);
+jest.mock('@/state/youShouldKnow', () => ({
+  checkYouShouldKnow: (connectionId: string, transport: unknown, ask: unknown) => mockCheckNotes(connectionId, transport, ask),
+  setNoteChats: () => undefined,
 }));
 const mockScanSlash = jest.fn(async (_connectionId: string, _transport: unknown, _ask: unknown) => undefined);
 jest.mock('@/state/slashCommands', () => ({
@@ -91,8 +91,8 @@ beforeEach(() => {
   mockCheckTheme.mockResolvedValue(true);
   mockScanSlash.mockReset();
   mockScanSlash.mockResolvedValue(undefined);
-  mockCheckHeadsUp.mockReset();
-  mockCheckHeadsUp.mockResolvedValue(undefined);
+  mockCheckNotes.mockReset();
+  mockCheckNotes.mockResolvedValue(undefined);
 });
 afterEach(() => {
   jest.restoreAllMocks();
@@ -463,9 +463,9 @@ describe('the host theme check, riding on the list poll', () => {
   });
 });
 
-// Heads Up rides on the poll the theme's way: every host's (their lists add
-// up), every 10 s, and a pull also looks for the mod again at once.
-describe('the Heads Up check', () => {
+// "You should know" rides on the poll the theme's way: every host's (their
+// notes add up), every 10 s, and a pull also looks for the plugin again at once.
+describe('the "You should know" check', () => {
   beforeEach(() => {
     mockLive = false; // a poll every 3 s
     jest.spyOn(client, 'snapshot').mockResolvedValue(snapshot);
@@ -473,20 +473,20 @@ describe('the Heads Up check', () => {
 
   it('reads on the first poll, then at most every 10 s, on another host too', async () => {
     const { unmount } = await renderHook(() => useWorkspaces(client, 'mac', false));
-    expect(mockCheckHeadsUp).toHaveBeenCalledTimes(1);
-    expect(mockCheckHeadsUp).toHaveBeenLastCalledWith('mac', client.transport, expect.objectContaining({ detect: false }));
+    expect(mockCheckNotes).toHaveBeenCalledTimes(1);
+    expect(mockCheckNotes).toHaveBeenLastCalledWith('mac', client.transport, expect.objectContaining({ detect: false }));
     await act(async () => { await jest.advanceTimersByTimeAsync(9_100); });
-    expect(mockCheckHeadsUp).toHaveBeenCalledTimes(1);
+    expect(mockCheckNotes).toHaveBeenCalledTimes(1);
     await act(async () => { await jest.advanceTimersByTimeAsync(3_000); });
-    expect(mockCheckHeadsUp).toHaveBeenCalledTimes(2);
+    expect(mockCheckNotes).toHaveBeenCalledTimes(2);
     await unmount();
   });
 
-  it('looks for the mod again on a pull to refresh', async () => {
+  it('looks for the plugin again on a pull to refresh', async () => {
     const { result, unmount } = await renderHook(() => useWorkspaces(client, 'host'));
     await act(async () => { await result.current.refresh(); });
-    expect(mockCheckHeadsUp).toHaveBeenCalledTimes(2);
-    expect(mockCheckHeadsUp).toHaveBeenLastCalledWith('host', client.transport, expect.objectContaining({ detect: true }));
+    expect(mockCheckNotes).toHaveBeenCalledTimes(2);
+    expect(mockCheckNotes).toHaveBeenLastCalledWith('host', client.transport, expect.objectContaining({ detect: true }));
     await unmount();
   });
 
@@ -496,7 +496,7 @@ describe('the Heads Up check', () => {
     jest.spyOn(client, 'snapshot').mockRejectedValue(new HerdrError('connect_failed', 'down'));
     const failed = await renderHook(() => useWorkspaces(client, 'host'));
     await failed.unmount();
-    expect(mockCheckHeadsUp).not.toHaveBeenCalled();
+    expect(mockCheckNotes).not.toHaveBeenCalled();
   });
 });
 

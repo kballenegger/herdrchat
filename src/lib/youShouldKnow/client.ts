@@ -1,5 +1,5 @@
 /**
- * Heads Up's round-trips, over any transport: detect, read, and change.
+ * "You should know"'s round-trips, over any transport: detect, read, and change.
  *
  * None of them throws. Detecting and reading are side tasks of the chat
  * list's poll, so a failure is worth one bit (null: keep what you have, try
@@ -9,42 +9,42 @@
 import { POLL_TIMEOUT_MS, SEND_TIMEOUT_MS } from '../herdr/timeouts';
 import type { HerdrTransport } from '../herdr/transport';
 import {
-  HEADSUP_MAX_BYTES,
-  headsUpCleanupCommand,
-  headsUpDetectCommand,
-  headsUpReadCommand,
-  headsUpWriteCommands,
-  parseHeadsUpDetect,
-  parseHeadsUpRead,
-  parseHeadsUpWrite,
+  YSK_MAX_BYTES,
+  yskCleanupCommand,
+  yskDetectCommand,
+  yskReadCommand,
+  yskWriteCommands,
+  parseYskDetect,
+  parseYskRead,
+  parseYskWrite,
   utf8Bytes,
-  type HeadsUpDetect,
-  type HeadsUpRead,
-  type HeadsUpWrite,
+  type YskDetect,
+  type YskRead,
+  type YskWrite,
 } from './command';
-import { parseHeadsUpFile, serializeHeadsUp, type HeadsUpChange, type HeadsUpFile } from './items';
+import { parseYskFile, serializeYsk, type YskChange, type YskFile } from './notes';
 
 /**
  * How often the chat list's poll looks for the store, once it has looked:
- * the slash commands' cadence. A host gets the mod when someone installs it,
- * which is rare; ten minutes notices that the same session, and a pull to
+ * the slash commands' cadence. A host gets the plugin when someone turns it
+ * on, which is rare; ten minutes notices that the same session, and a pull to
  * refresh sooner.
  */
-export const HEADSUP_DETECT_INTERVAL_MS = 600_000;
+export const YSK_DETECT_INTERVAL_MS = 600_000;
 
 /**
  * How often the poll reads the list while the chats are on screen: the host
- * theme's cadence. Sessions write it as they ask and fail; ten seconds keeps
+ * theme's cadence. Sessions write it as notes come and go; ten seconds keeps
  * the bar current for a line of traffic when nothing moved.
  */
-export const HEADSUP_READ_INTERVAL_MS = 10_000;
+export const YSK_READ_INTERVAL_MS = 10_000;
 
-export function headsUpDetectDue(lastDetect: number | null, now: number): boolean {
-  return lastDetect === null || now - lastDetect >= HEADSUP_DETECT_INTERVAL_MS;
+export function yskDetectDue(lastDetect: number | null, now: number): boolean {
+  return lastDetect === null || now - lastDetect >= YSK_DETECT_INTERVAL_MS;
 }
 
-export function headsUpReadDue(lastRead: number | null, now: number): boolean {
-  return lastRead === null || now - lastRead >= HEADSUP_READ_INTERVAL_MS;
+export function yskReadDue(lastRead: number | null, now: number): boolean {
+  return lastRead === null || now - lastRead >= YSK_READ_INTERVAL_MS;
 }
 
 /** A command, or null when its builder refused what it was given (a bad path, version or token). */
@@ -67,69 +67,69 @@ async function run(transport: HerdrTransport, command: string | null, timeoutMs:
 }
 
 /** Where the store is, that there is none, or null for a failed check. */
-export async function detectHeadsUp(transport: HerdrTransport): Promise<HeadsUpDetect | null> {
-  const stdout = await run(transport, headsUpDetectCommand(), POLL_TIMEOUT_MS);
-  return stdout === null ? null : parseHeadsUpDetect(stdout);
+export async function detectYouShouldKnow(transport: HerdrTransport): Promise<YskDetect | null> {
+  const stdout = await run(transport, yskDetectCommand(), POLL_TIMEOUT_MS);
+  return stdout === null ? null : parseYskDetect(stdout);
 }
 
 /** The store, read against the version held. Null for a failed read. */
-export async function readHeadsUp(transport: HerdrTransport, path: string, lastVersion: string | null): Promise<HeadsUpRead | null> {
-  const stdout = await run(transport, built(() => headsUpReadCommand(path, lastVersion)), POLL_TIMEOUT_MS);
-  return stdout === null ? null : parseHeadsUpRead(stdout, lastVersion);
+export async function readYouShouldKnow(transport: HerdrTransport, path: string, lastVersion: string | null): Promise<YskRead | null> {
+  const stdout = await run(transport, built(() => yskReadCommand(path, lastVersion)), POLL_TIMEOUT_MS);
+  return stdout === null ? null : parseYskRead(stdout, lastVersion);
 }
 
 /** Write `raw` over the store if it still has `version`. Null for a failed write. */
-export async function writeHeadsUp(
+export async function writeYouShouldKnow(
   transport: HerdrTransport,
   path: string,
   version: string,
   raw: Record<string, unknown>,
   token: string
-): Promise<HeadsUpWrite | null> {
-  const json = serializeHeadsUp(raw);
-  if (utf8Bytes(json) > HEADSUP_MAX_BYTES) return null;
-  const commands = built(() => headsUpWriteCommands(path, version, json, token));
+): Promise<YskWrite | null> {
+  const json = serializeYsk(raw);
+  if (utf8Bytes(json) > YSK_MAX_BYTES) return null;
+  const commands = built(() => yskWriteCommands(path, version, json, token));
   if (commands === null) return null;
   let stdout: string | null = null;
   for (const command of commands) {
     stdout = await run(transport, command, SEND_TIMEOUT_MS);
     if (stdout === null) {
       // A piece that did not go leaves the temp file beside the store (the
-      // mod's glob never matches it). Removed on a best effort, not awaited:
+      // plugin's glob never matches it). Removed on a best effort, not awaited:
       // the host may be the reason the piece failed.
-      if (commands.length > 1) void run(transport, built(() => headsUpCleanupCommand(path, token)), POLL_TIMEOUT_MS);
+      if (commands.length > 1) void run(transport, built(() => yskCleanupCommand(path, token)), POLL_TIMEOUT_MS);
       return null;
     }
   }
-  return stdout === null ? null : parseHeadsUpWrite(stdout);
+  return stdout === null ? null : parseYskWrite(stdout);
 }
 
 /** The store as the app holds it: where, which version, and what it said. */
 export interface HeldStore {
   path: string;
   version: string;
-  file: HeadsUpFile;
+  file: YskFile;
 }
 
 export type ChangeResult =
   /**
-   * Written (`changed`), or nothing to write: the change found the item
-   * already as asked, or gone. `held` is the store as it now is.
+   * Written (`changed`), or nothing to write: the change found the note
+   * gone, or moved on by the terminal. `held` is the store as it now is.
    */
   | { ok: true; changed: boolean; held: HeldStore }
   /** Not written: the host could not be reached, or the file kept changing under it. */
   | { ok: false; held: HeldStore | null };
 
 /** How many tokens a write's temp file can have: ten base-36 characters. */
-export const HEADSUP_TOKEN_SPACE = 36 ** 10;
+export const YSK_TOKEN_SPACE = 36 ** 10;
 
 /** A fresh temp-file token for one write. */
 export function writeToken(random: () => number = Math.random): string {
-  return Math.floor(random() * HEADSUP_TOKEN_SPACE).toString(36).padStart(10, '0');
+  return Math.floor(random() * YSK_TOKEN_SPACE).toString(36).padStart(10, '0');
 }
 
 /** Writes a change tries: the first, and one more against a fresh read when a session wrote in between. */
-export const HEADSUP_WRITE_ATTEMPTS = 2;
+export const YSK_WRITE_ATTEMPTS = 2;
 
 /**
  * Apply a change to the store, compare-and-swap: written against the version
@@ -138,26 +138,26 @@ export const HEADSUP_WRITE_ATTEMPTS = 2;
  * stale answer gives up, since something is writing it faster than a phone
  * can keep up, and the person is told.
  */
-export async function changeHeadsUp(
+export async function changeYouShouldKnow(
   transport: HerdrTransport,
   held: HeldStore,
-  change: HeadsUpChange,
+  change: YskChange,
   token: () => string = writeToken
 ): Promise<ChangeResult> {
   let current = held;
-  for (let attempt = 0; attempt < HEADSUP_WRITE_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < YSK_WRITE_ATTEMPTS; attempt += 1) {
     const next = change(current.file.raw);
     if (next === null) return { ok: true, changed: false, held: current };
-    const written = await writeHeadsUp(transport, current.path, current.version, next, token());
+    const written = await writeYouShouldKnow(transport, current.path, current.version, next, token());
     if (written === null) return { ok: false, held: current };
     if (written.kind === 'written') {
-      const file = parseHeadsUpFile(serializeHeadsUp(next));
+      const file = parseYskFile(serializeYsk(next));
       return file === null ? { ok: false, held: current } : { ok: true, changed: true, held: { path: current.path, version: written.version, file } };
     }
-    if (attempt === HEADSUP_WRITE_ATTEMPTS - 1) break;
-    const fresh = await readHeadsUp(transport, current.path, null);
+    if (attempt === YSK_WRITE_ATTEMPTS - 1) break;
+    const fresh = await readYouShouldKnow(transport, current.path, null);
     if (fresh === null || fresh.kind !== 'present') return { ok: false, held: null };
-    const file = parseHeadsUpFile(fresh.text);
+    const file = parseYskFile(fresh.text);
     if (file === null) return { ok: false, held: null };
     current = { path: current.path, version: fresh.version, file };
   }

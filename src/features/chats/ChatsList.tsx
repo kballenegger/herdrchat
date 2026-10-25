@@ -38,8 +38,8 @@ import { useChatActions } from '@/features/chats/useChatActions';
 import { useHostChats } from '@/features/chats/useHostChats';
 import { HostNotices } from '@/features/chats/HostNotices';
 import { HostFeeds } from '@/features/chats/HostFeeds';
-import { HeadsUpBar } from '@/features/headsup/HeadsUpBar';
-import { useOpenHeadsUpItems } from '@/features/headsup/useHeadsUpHosts';
+import { NotesBar } from '@/features/youShouldKnow/NotesBar';
+import { useNotesOf } from '@/features/youShouldKnow/useHostNotes';
 import { openFor, readsOf, rowKey, type ListedChat, type OpenChat, type ReadsByConnection } from '@/features/chats/listedChat';
 import { LayoutPeekOverlay, useLayoutPeek, type LayoutAnchor } from '@/features/spaces/LayoutPeek';
 import { connectionRecovery } from '@/lib/connectionRecovery';
@@ -130,7 +130,7 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
   // are the list's; another host's failure is a notice at the end.
   const chats = useHostChats(connection, client);
   const { summaries, loading, error, errorCode, refresh, notices, connectionIds } = chats;
-  const headsUp = useOpenHeadsUpItems(connectionIds);
+  const notes = useNotesOf(connectionIds);
   const integrations = useOutdatedIntegrations(client);
   const [query, setQuery] = useState('');
   const prefs = useChatPrefs(db, connection, summaries, connectionIds);
@@ -379,8 +379,8 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
         menuLabel="Settings"
         onMenu={() => router.navigate('/settings')}
       />
-      {/* What the Heads Up mod's list holds, on hosts that run it; nothing on any other. */}
-      <HeadsUpBar items={headsUp} onPress={() => router.navigate('/headsup')} />
+      {/* "You should know"'s notes, on hosts whose Claude Code has it on; nothing on any other. */}
+      <NotesBar notes={notes} onPress={() => router.navigate('/you-should-know')} />
 
       {/* Rename and close fail outside the poll's own error path, so they get
           their own banner, dismissible, because unlike a connection error this
