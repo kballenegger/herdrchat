@@ -26,6 +26,7 @@ import {
   pickAttachments,
   type Attachment,
 } from '@/features/thread/attachments';
+import { AgentsBar } from '@/features/thread/AgentsBar';
 import { BlockedBar } from '@/features/thread/BlockedBar';
 import { ChatNoteBar } from '@/features/youShouldKnow/ChatNoteBar';
 import { useChatNote } from '@/features/youShouldKnow/useChatNote';
@@ -721,6 +722,16 @@ export default function ThreadScreen({ connectionId, workspaceId, paneId, title,
               )}
               {connection !== null && note !== null && (
                 <ChatNoteBar connectionId={connection.id} note={note} onDraft={setDraft} />
+              )}
+              {thread.agentsPane !== null && thread.agentsPaneAt !== null && (
+                <AgentsBar
+                  pane={thread.agentsPane}
+                  readAt={thread.agentsPaneAt}
+                  items={rows}
+                  scope={delegationScope}
+                  connectionId={connection?.id ?? ''}
+                  chat={chat}
+                />
               )}
               <Composer
                 draft={draft}
