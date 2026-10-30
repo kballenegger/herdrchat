@@ -44,6 +44,9 @@ export function ChatSearch({ query, onChange, onSubmit, onEscape }: {
           value={query}
           onChangeText={onChange}
           onSubmitEditing={onSubmit}
+          // Return keeps the field: with a match the chat opening dismisses
+          // the keyboard, and with none the person goes on typing.
+          submitBehavior="submit"
           onFocus={() => useChatSearch.getState().setFocused(true)}
           onBlur={() => useChatSearch.getState().setFocused(false)}
           autoCapitalize="none"

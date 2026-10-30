@@ -27,3 +27,10 @@ extension UIView {
     return nil
   }
 }
+
+extension Notification.Name {
+  /// Posted by a view that held focus and is neither a text field nor a text
+  /// view, when it lets go (the pane terminal, in herdr-terminal, which posts
+  /// the same name as a string): `FindKeyView` hears no other sign of it.
+  static let herdrFocusReleased = Notification.Name("HerdrFocusReleased")
+}

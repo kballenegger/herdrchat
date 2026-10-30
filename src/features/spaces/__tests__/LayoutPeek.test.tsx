@@ -6,6 +6,7 @@ import { listChats, type ListedChat } from '@/features/chats/listedChat';
 import { HerdrClient } from '@/lib/herdr/client';
 import { DemoHost } from '@/lib/demo/host';
 import type { Peek } from '@/lib/spaces/peek';
+import { useChatSearch } from '@/state/chatSearch';
 import { LayoutPeekOverlay } from '../LayoutPeek';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -29,7 +30,7 @@ jest.mock('@/features/terminal/navigation', () => ({
 jest.mock('@/components/Glass', () => ({ Glass: (props: ViewProps) => <MockView {...props} /> }));
 // The native Esc view, as a plain view that keeps its props, so Esc can be pressed.
 jest.mock('../../../../modules/herdr-keys/src/escape', () => ({
-  EscapeKeyView: (props: ViewProps & { active: boolean; onEscape: () => void }) => <MockView testID="escape-key" {...props} />,
+  EscapeKeyView: (props: ViewProps & { active: boolean; onEscape: () => void; onFind?: () => void }) => <MockView testID="escape-key" {...props} />,
 }));
 
 async function w6(): Promise<ListedChat> {
@@ -66,6 +67,16 @@ it('closes a pinned card on a tap outside it, and on Esc', async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
   (view.getByTestId('escape-key').props as { onEscape: () => void }).onEscape();
   expect(onClose).toHaveBeenCalledTimes(2);
+});
+
+// The card floats on the window, outside the chats screen's Command-F, so
+// it offers the key itself: it closes and the search takes the cursor.
+it('closes a pinned card on Command-F and asks the chat search for the cursor', async () => {
+  useChatSearch.setState({ focusRequests: 0 });
+  const { view, onClose } = await drawn(peekOf(true), await w6());
+  (view.getByTestId('escape-key').props as { onFind: () => void }).onFind();
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(useChatSearch.getState().focusRequests).toBe(1);
 });
 
 // Pinned as a finger or a click lands, not when it lifts: a box under it is

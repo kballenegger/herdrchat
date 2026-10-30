@@ -29,13 +29,16 @@ describe('firstChatRow', () => {
     expect(all[0]?.kind).toBe('group');
     const first = all.find((row) => row.kind === 'chat');
     expect(first?.kind === 'chat' && first.summary.workspaceId).toBe('w1');
-    expect(firstChatRow(all)).toEqual(expect.objectContaining({ connectionId: 'demo', workspaceId: 'w1', paneId: undefined }));
+    expect(firstChatRow(all)).toEqual({
+      connectionId: 'demo', workspaceId: 'w1', title: 'Folder picker read errors', paneId: undefined,
+      sig: '11111111-1111-4111-8111-111111111111',
+    });
   });
 
   it('follows the search', () => {
     expect(firstChatRow(rows('Release notes'))).toEqual({
       connectionId: 'demo', workspaceId: 'w2', title: 'Release notes summary', paneId: undefined,
-      sig: expect.any(String),
+      sig: '22222222-2222-4222-8222-222222222222',
     });
   });
 

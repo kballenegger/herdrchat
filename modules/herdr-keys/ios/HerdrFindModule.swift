@@ -37,11 +37,19 @@ public class HerdrFindModule: Module {
 /// responder itself, but only then: `EscapeKeyView` takes focus from whoever
 /// holds it and hands it back; this one never takes it from anything. It
 /// claims focus when it lands in a window, when `active` turns on, and after
-/// a text field, a text view or the keyboard lets go of focus, each time on
+/// a text field, a text view, the keyboard or a pane's terminal lets go of
+/// focus, each time on
 /// the next run loop pass and only if nobody holds focus by then (moving from
 /// one field to another lets go and takes in the same pass). A field that
 /// becomes first responder takes it from this view as from any other, and it
 /// claims again when that field lets go.
+///
+/// The terminal is named because it is neither a text field nor a text view:
+/// SwiftTerm's view is a scroll view, posts no end-of-editing notification,
+/// and has no accessory view, so with a hardware keyboard the keyboard may
+/// never say it hid either. On iPad it sits beside the list and takes focus
+/// as it opens; without its own `herdrFocusReleased`, leaving it for a chat
+/// left nobody focused and Command-F dead until a field was tapped.
 ///
 /// It is not a text input, so holding focus raises no software keyboard; with
 /// a hardware keyboard nothing shows at all.
@@ -52,8 +60,10 @@ public class HerdrFindModule: Module {
 /// Esc is offered only while a text field inside this view is the first
 /// responder and JS says it is the search field (`escape`). The layout card's
 /// `EscapeKeyView` holds focus itself while it is pinned, so no field here
-/// has it and its Esc closes the card; when the card hands focus back to this
-/// view, Command-F is live again at once.
+/// has it and its Esc closes the card. That card floats in its own overlay
+/// on the window, outside this view, so this view is not on its chain at all:
+/// the card offers Command-F itself while pinned (`find`), closing and handing
+/// over to the search.
 final class FindKeyView: ExpoView {
   let onFind = EventDispatcher()
   let onEscape = EventDispatcher()
@@ -92,6 +102,7 @@ final class FindKeyView: ExpoView {
     center.addObserver(self, selector: #selector(focusLetGo), name: UITextField.textDidEndEditingNotification, object: nil)
     center.addObserver(self, selector: #selector(focusLetGo), name: UITextView.textDidEndEditingNotification, object: nil)
     center.addObserver(self, selector: #selector(focusLetGo), name: UIResponder.keyboardDidHideNotification, object: nil)
+    center.addObserver(self, selector: #selector(focusLetGo), name: .herdrFocusReleased, object: nil)
   }
 
   required init?(coder: NSCoder) {

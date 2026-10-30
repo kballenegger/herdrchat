@@ -20,6 +20,13 @@ it('calls onSubmit on Return', async () => {
   expect(given.onSubmit).toHaveBeenCalledTimes(1);
 });
 
+// React Native's single-line default blurs on Return, even with nothing to
+// open; opening a chat dismisses the keyboard on its own.
+it('keeps the field focused on Return', async () => {
+  const screen = await render(<ChatSearch {...props()} />);
+  expect(screen.getByTestId('chat-search')).toHaveProp('submitBehavior', 'submit');
+});
+
 // Command-F, through the store: the cursor goes in the field, every time.
 it('focuses the field on each focus request', async () => {
   const focus = jest.spyOn(TextInput.prototype, 'focus');

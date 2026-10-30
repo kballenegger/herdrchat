@@ -80,10 +80,14 @@ hand on an iPad (or an iPhone) with a keyboard, after a native build:
 - "Find chat" is listed while Command is held, on the chats screen.
 - Return in the search opens the first chat it found (pinned first, then
   Needs you, Working, Idle; the first agent under a space card, not its
-  layout); with nothing found it does nothing.
+  layout); with nothing found it opens nothing and the cursor stays in the
+  search.
 - Esc in the search empties it and leaves the field; Esc in the composer
   does not touch the search. With a space's layout card pinned, Esc closes
-  the card, and Command-F works again right after.
+  the card, and Command-F works again right after; Command-F with the card
+  still pinned closes it and puts the cursor in the search.
+- On iPad, open a pane's terminal beside the list (it takes focus), then a
+  chat with nothing focused: Command-F still puts the cursor in the search.
 - With Settings or Hosts open over the chats, or a chat pushed on an iPhone,
   Command-F does not reach the chats search.
 - On Android with a hardware keyboard, the same list with Enter for Return,
