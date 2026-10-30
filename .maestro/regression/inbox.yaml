@@ -34,6 +34,7 @@ appId: dev.herdr.HerdrChat
     element:
       id: toggle-inbox
     direction: DOWN
+    centerElement: true
 - assertNotVisible:
     id: toggle-hide-working
 - tapOn:
@@ -312,6 +313,7 @@ appId: dev.herdr.HerdrChat
     element:
       id: toggle-hide-working
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: toggle-hide-working
 - runFlow: _close-settings.yaml
@@ -352,6 +354,7 @@ appId: dev.herdr.HerdrChat
     element:
       id: toggle-hide-working
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: toggle-hide-working
 - tapOn:
