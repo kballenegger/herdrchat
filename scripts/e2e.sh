@@ -23,8 +23,8 @@
 set -u
 cd "$(dirname "$0")/.."
 
-ALL_FLOWS="regression/chat-list regression/inbox regression/new-chat regression/thread regression/keyboard regression/composer-keys regression/folder-trust regression/omp regression/grok regression/agy regression/history regression/multi-agent regression/welcome regression/subagents regression/agents-pane regression/slash-commands regression/shell-commands regression/terminal regression/space-layout regression/menu regression/tabs regression/list-modes regression/host-editor-keyboard regression/host-theme regression/you-should-know regression/notifications smoke new-chat tool-activity thread-header"
-BOTH_THEMES="smoke regression/chat-list regression/inbox regression/thread regression/agents-pane regression/tabs regression/terminal regression/you-should-know"
+ALL_FLOWS="regression/chat-list regression/find-chat regression/inbox regression/new-chat regression/thread regression/keyboard regression/composer-keys regression/folder-trust regression/omp regression/grok regression/agy regression/history regression/multi-agent regression/welcome regression/subagents regression/agents-pane regression/slash-commands regression/shell-commands regression/terminal regression/space-layout regression/menu regression/tabs regression/list-modes regression/host-editor-keyboard regression/host-theme regression/you-should-know regression/notifications smoke new-chat tool-activity thread-header"
+BOTH_THEMES="smoke regression/chat-list regression/find-chat regression/inbox regression/thread regression/agents-pane regression/tabs regression/terminal regression/you-should-know"
 THREAD_FLOWS="regression/thread regression/keyboard regression/composer-keys regression/history regression/subagents regression/agents-pane regression/slash-commands regression/shell-commands regression/omp regression/grok regression/agy tool-activity thread-header"
 
 # The flows a changed file can break. Shared code (components, theme, state,
@@ -38,7 +38,8 @@ flows_for() {
     *__tests__/*|*.test.ts|*.test.tsx|*.md|relay/*|site/*|modules/*/android/*) ;;
     src/features/thread/*|src/lib/thread*|src/lib/composer*|app/chat/*) echo "$THREAD_FLOWS regression/you-should-know" ;;
     src/state/agentsBar.ts) echo "regression/agents-pane" ;;
-    src/features/chats/*|"app/(tabs)/index.tsx"|app/snooze.tsx|src/lib/inbox/*|src/state/inbox*|src/state/undoNotice.ts|src/state/customSnooze.ts|src/state/swipeActivity.ts) echo "regression/chat-list regression/inbox regression/list-modes regression/menu regression/multi-agent regression/you-should-know" ;;
+    src/features/chats/*|"app/(tabs)/index.tsx"|app/snooze.tsx|src/lib/inbox/*|src/state/inbox*|src/state/undoNotice.ts|src/state/customSnooze.ts|src/state/swipeActivity.ts) echo "regression/chat-list regression/find-chat regression/inbox regression/list-modes regression/menu regression/multi-agent regression/you-should-know" ;;
+    src/state/chatSearch.ts) echo "regression/find-chat" ;;
     src/features/youShouldKnow/*|src/lib/youShouldKnow/*|src/state/youShouldKnow.ts|app/you-should-know.tsx) echo "regression/you-should-know" ;;
     src/features/newChat/*|app/new-chat.tsx|app/folder-picker.tsx) echo "regression/new-chat regression/folder-trust new-chat" ;;
     src/features/terminal/*|src/lib/terminal/*|modules/herdr-terminal/*|modules/herdr-shell-registry/*) echo "regression/terminal regression/tabs" ;;
@@ -47,7 +48,7 @@ flows_for() {
     src/features/spaces/*|src/lib/spaces/*|app/space-layout.tsx) echo "regression/space-layout" ;;
     src/features/servers/*|app/server/*|app/hosts.tsx) echo "regression/host-editor-keyboard" ;;
     src/features/welcome/*|app/welcome.tsx) echo "regression/welcome" ;;
-    modules/herdr-keys/*) echo "regression/composer-keys regression/keyboard" ;;
+    modules/herdr-keys/*) echo "regression/composer-keys regression/keyboard regression/find-chat" ;;
     src/*|app/*|modules/*|package.json|package-lock.json|app.json) echo "$ALL_FLOWS" ;;
   esac
 }

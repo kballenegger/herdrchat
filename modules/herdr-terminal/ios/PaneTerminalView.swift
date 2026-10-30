@@ -56,6 +56,26 @@ final class PaneTerminalView: SwiftTerm.TerminalView {
   /// keep apart from its pinch.
   var wheelGesture: UIGestureRecognizer { wheel }
 
+  /// Said when the terminal lets go of focus, resigning or leaving the
+  /// window: the chats screen's Command-F (`FindKeyView`, in herdr-keys,
+  /// which observes this name) takes focus back only when nobody holds it,
+  /// and this view is not a text field or text view, whose end of editing it
+  /// already hears. The name is a string so neither module imports the other.
+  static let focusReleased = Notification.Name("HerdrFocusReleased")
+
+  override func resignFirstResponder() -> Bool {
+    let resigned = super.resignFirstResponder()
+    if resigned { NotificationCenter.default.post(name: Self.focusReleased, object: self) }
+    return resigned
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    // Unmounted while focused: whether UIKit's own resign on the way out
+    // goes through the override above is not promised. Said twice is harmless.
+    if window == nil { NotificationCenter.default.post(name: Self.focusReleased, object: self) }
+  }
+
   /// Not SwiftTerm's: it adds the pan that drags with the mouse. The wheel
   /// above takes swipes instead, and checks the mode as each one begins.
   override func mouseModeChanged(source: Terminal) {}

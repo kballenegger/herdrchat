@@ -9,6 +9,7 @@ import type { ListedChat } from '@/features/chats/listedChat';
 import { spaceStats, spaceTitle } from '@/features/chats/rowText';
 import { peekReducer, type Peek } from '@/lib/spaces/peek';
 import { popoverPlacement } from '@/lib/spaces/popover';
+import { useChatSearch } from '@/state/chatSearch';
 import { motion, radius, screenPadding, spaceLayout, spacing } from '@/theme/tokens';
 import { applyPaneOpen, type PaneOpen } from './openPane';
 import { SpaceLayout } from './SpaceLayout';
@@ -142,10 +143,18 @@ function LayoutCard({ peek, summary, onClose, onPin, onHoverCard }: {
     onClose();
     applyPaneOpen(pane);
   };
+  // Command-F while the card holds focus: it floats outside the chats
+  // screen's own Command-F (`ChatsFind`), so it closes and asks for the
+  // search itself.
+  const find = () => {
+    onClose();
+    useChatSearch.getState().requestFocus();
+  };
   return (
     <EscapeKeyView
       active={peek.pinned}
       onEscape={onClose}
+      onFind={find}
       style={{ position: 'absolute', left: place.left, top: place.top, bottom: place.bottom, width: place.width }}>
       <HoverView onHoverChange={hover}>
         {/* A finger or a click landing anywhere on the card pins it, on touch

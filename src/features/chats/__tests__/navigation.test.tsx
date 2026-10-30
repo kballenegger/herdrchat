@@ -13,6 +13,7 @@ const mockPush = jest.fn();
 const mockDismissTo = jest.fn();
 
 jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
   useLocalSearchParams: () => ({ workspaceId: 'w2', title: 'Notes' }),
   useRouter: () => ({ back: jest.fn() }),
   useFocusEffect: (effect: () => void) => {

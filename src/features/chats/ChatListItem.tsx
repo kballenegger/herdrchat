@@ -16,6 +16,7 @@ import type { SheetAction } from '@/components/ActionSheet';
 import { agentPrefRow, agentTestKey, isAgentRow, isAgentUnread } from './agentRows';
 import { spaceCardMode } from './chatGroups';
 import { isChatUnread, isPaneUnread } from './chatUnread';
+import { chatRowTarget, type ChatRowTarget } from './chatRowTarget';
 import { openChat } from './navigation';
 import { PaneRow } from './PaneRow';
 import { paneTarget } from './paneTarget';
@@ -36,6 +37,17 @@ export interface LayoutButton {
   open: (item: ListedChat, anchor: LayoutAnchor) => void;
   hover: (item: ListedChat, anchor: LayoutAnchor) => void;
   leave: (item: ListedChat) => void;
+}
+
+/** Opens a row's conversation (`chatRowTarget`), as a tap on it does. */
+export function openChatTarget(target: ChatRowTarget) {
+  Keyboard.dismiss();
+  openChat(target.connectionId, target.workspaceId, target.title, target.paneId, target.sig);
+}
+
+function openRow(row: ListItemWithTerminals<ListedChat>) {
+  const target = chatRowTarget(row);
+  if (target !== null) openChatTarget(target);
 }
 
 /**
@@ -141,11 +153,7 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
         muted={ownMuted && !sharesCard}
         selected={openHere === target.key}
         unread={isPaneUnread(item, pane, rowReads, openHere)}
-        onPress={() => {
-          Keyboard.dismiss();
-          openChat(item.connectionId, item.workspaceId, target.title, target.paneId,
-            target.paneId === undefined ? item.sessionSig : pane.sessionSig);
-        }}
+        onPress={() => openRow(row)}
         onLongPress={() => actions.manageChat(item, ownPersonal ? [
           { label: ownPinned ? 'Unpin' : 'Pin', onPress: () => prefs.togglePin(own) },
           ...(ownMutable ? [{ label: ownMuted ? 'Unmute notifications' : 'Mute notifications', onPress: () => prefs.toggleMute(own) }] : []),
@@ -198,11 +206,7 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
       onToggleMute={mutable ? () => prefs.toggleMute(item) : undefined}
       selected={!space && openHere === (agent?.chatKey ?? item.workspaceId)}
       unread={agent === null ? isChatUnread(item, rowReads, openHere) : isAgentUnread(agent, rowReads, openHere)}
-      onPress={() => {
-        Keyboard.dismiss();
-        openChat(item.connectionId, item.workspaceId, rowTitle(item), agent?.pane?.paneId,
-          agent?.pane != null ? agent.pane.sessionSig : item.sessionSig);
-      }}
+      onPress={() => openRow(row)}
       onLongPress={() => actions.manageChat(item, menu)}
       onSwiped={onSwiped}
       trailing={section === null ? renameCloseSwipe(rename, close) : choices?.swipe}

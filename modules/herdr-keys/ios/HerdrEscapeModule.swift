@@ -9,10 +9,15 @@ public class HerdrEscapeModule: Module {
     Name("HerdrEscape")
 
     View(EscapeKeyView.self) {
-      Events("onEscape")
+      Events("onEscape", "onFind")
 
       Prop("active") { (view: EscapeKeyView, active: Bool) in
         view.active = active
+      }
+
+      // Also offer Command-F ("Find chat") while active.
+      Prop("find") { (view: EscapeKeyView, find: Bool) in
+        view.findEnabled = find
       }
     }
   }
@@ -27,8 +32,18 @@ public class HerdrEscapeModule: Module {
 /// beside the list, on iPad), and hands it back to whatever held it when it
 /// stops being active or leaves the window: someone typing who glanced at a
 /// layout goes on typing without tapping the field again.
+///
+/// With `find`, it offers Command-F too, listed as "Find chat". The layout
+/// card floats in a full-window overlay attached to the window itself, not
+/// under the chats screen's `FindKeyView`, so while the card holds focus that
+/// view is not on the chain and would never hear the key. Command-F lets go
+/// of focus without handing it back (the search field is about to take it,
+/// and handing it to the composer first would race that) and says `onFind`.
 final class EscapeKeyView: ExpoView {
   let onEscape = EventDispatcher()
+  let onFind = EventDispatcher()
+
+  var findEnabled = false
 
   var active = false {
     didSet { claimFocus() }
@@ -42,8 +57,15 @@ final class EscapeKeyView: ExpoView {
 
   override var canBecomeFirstResponder: Bool { active }
 
+  private lazy var find: UIKeyCommand = {
+    let command = UIKeyCommand(title: "Find chat", action: #selector(findPressed), input: "f", modifierFlags: .command)
+    command.wantsPriorityOverSystemBehavior = true
+    return command
+  }()
+
   override var keyCommands: [UIKeyCommand]? {
-    active ? [escape] : []
+    guard active else { return [] }
+    return findEnabled ? [escape, find] : [escape]
   }
 
   /// What had focus before this view took it, to hand it back.
@@ -90,19 +112,10 @@ final class EscapeKeyView: ExpoView {
   @objc private func escapePressed() {
     onEscape([:])
   }
-}
 
-private extension UIResponder {
-  private static weak var herdrFound: UIResponder?
-
-  /// The first responder now, if any: the action goes to it when sent to nil.
-  static func herdrCurrentFirstResponder() -> UIResponder? {
-    herdrFound = nil
-    UIApplication.shared.sendAction(#selector(UIResponder.herdrCaptureFirstResponder), to: nil, from: nil, for: nil)
-    return herdrFound
-  }
-
-  @objc private func herdrCaptureFirstResponder() {
-    UIResponder.herdrFound = self
+  @objc private func findPressed() {
+    previous = nil
+    if isFirstResponder { resignFirstResponder() }
+    onFind([:])
   }
 }

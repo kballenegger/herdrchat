@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { AdaptiveColumns, useTabletLayout } from '@/components/AdaptiveColumns';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
+import { ChatsFind } from '@/features/chats/ChatsFind';
 import ChatsList from '@/features/chats/ChatsList';
 import { usePendingPaneOpen } from '@/features/spaces/usePendingPaneOpen';
 import { terminalBackControl } from '@/features/terminal/backControl';
@@ -38,50 +39,53 @@ export default function ChatsScreen() {
   const chat = chatOf(shown);
   const terminal = terminalOf(shown);
   const selected = chat?.workspaceId;
+  // Around both columns, so Command-F finds a chat mid-prompt too.
   return (
-    <AdaptiveColumns sidebar={
-      <ChatsList
-        selectedWorkspaceId={selected}
-        selectedConnectionId={chat?.connectionId}
-        selectedTerminal={terminal === null ? undefined : { connectionId: terminal.connectionId, paneId: terminal.paneId }}
-      />
-    }>
-      {chat !== null ? (
-        // Keyed by pane too, so moving between a workspace and one of its
-        // agents remounts the thread instead of carrying one's state over.
-        <ThreadScreen
-          key={`${chat.connectionId}:${chat.workspaceId}:${chat.paneId ?? ''}`}
-          connectionId={chat.connectionId}
-          workspaceId={chat.workspaceId}
-          paneId={chat.paneId}
-          listedSig={chat.sig}
-          title={chat.title}
-          onBack={wide ? undefined : () => select(null)}
+    <ChatsFind>
+      <AdaptiveColumns sidebar={
+        <ChatsList
+          selectedWorkspaceId={selected}
+          selectedConnectionId={chat?.connectionId}
+          selectedTerminal={terminal === null ? undefined : { connectionId: terminal.connectionId, paneId: terminal.paneId }}
         />
-      ) : terminal !== null ? (
-        // Keyed as the phone's route keys it: another pane is another shell,
-        // and the old one hangs up as it unmounts. Back is where it came from,
-        // the chat whose Terminal opened it or nothing, at any width. Beside
-        // the chats it says which: a chat there has no back control at all.
-        <TerminalScreen
-          key={`terminal:${terminal.connectionId}:${terminal.paneId}:${terminal.terminalId ?? ''}`}
-          connectionId={terminal.connectionId}
-          paneId={terminal.paneId}
-          kind={terminal.paneKind}
-          terminalId={terminal.terminalId}
-          title={terminal.title}
-          back={terminalBackControl(wide, terminal.from)}
-          onBack={() => select(terminal.from)}
-        />
-      ) : wide ? (
-        <Screen>
-          <EmptyState
-            symbol="bubble.left.and.bubble.right"
-            title="Select a conversation"
-            body="Choose a chat on the left, or start a new one."
+      }>
+        {chat !== null ? (
+          // Keyed by pane too, so moving between a workspace and one of its
+          // agents remounts the thread instead of carrying one's state over.
+          <ThreadScreen
+            key={`${chat.connectionId}:${chat.workspaceId}:${chat.paneId ?? ''}`}
+            connectionId={chat.connectionId}
+            workspaceId={chat.workspaceId}
+            paneId={chat.paneId}
+            listedSig={chat.sig}
+            title={chat.title}
+            onBack={wide ? undefined : () => select(null)}
           />
-        </Screen>
-      ) : <ChatsList />}
-    </AdaptiveColumns>
+        ) : terminal !== null ? (
+          // Keyed as the phone's route keys it: another pane is another shell,
+          // and the old one hangs up as it unmounts. Back is where it came from,
+          // the chat whose Terminal opened it or nothing, at any width. Beside
+          // the chats it says which: a chat there has no back control at all.
+          <TerminalScreen
+            key={`terminal:${terminal.connectionId}:${terminal.paneId}:${terminal.terminalId ?? ''}`}
+            connectionId={terminal.connectionId}
+            paneId={terminal.paneId}
+            kind={terminal.paneKind}
+            terminalId={terminal.terminalId}
+            title={terminal.title}
+            back={terminalBackControl(wide, terminal.from)}
+            onBack={() => select(terminal.from)}
+          />
+        ) : wide ? (
+          <Screen>
+            <EmptyState
+              symbol="bubble.left.and.bubble.right"
+              title="Select a conversation"
+              body="Choose a chat on the left, or start a new one."
+            />
+          </Screen>
+        ) : <ChatsList />}
+      </AdaptiveColumns>
+    </ChatsFind>
   );
 }

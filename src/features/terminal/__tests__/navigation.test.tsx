@@ -16,6 +16,7 @@ const mockBack = jest.fn();
 const mockListProps = jest.fn();
 
 jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
   useLocalSearchParams: () => ({ connectionId: 'host-a', paneId: 'w6:p3', kind: 'shell', terminalId: 'term_w6_p3', title: 'vim · api' }),
   useRouter: () => ({ back: mockBack }),
   useFocusEffect: (effect: () => void) => {

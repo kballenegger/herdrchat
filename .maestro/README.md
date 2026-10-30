@@ -18,6 +18,7 @@ where regressions are found.
 | Flow | Covers |
 |------|--------|
 | `regression/chat-list` | pin and mute (swipe right, long press), the Pinned group appearing on screen, the trailing swipe opening and closing |
+| `regression/find-chat` | the chats search found by typing ("Release notes" lists only w2), the keyboard's Return opening the first chat found (its thread and composer), the search kept on the way back and its clear button bringing the whole list back (screenshots `find-chat-opened-<appearance>`, `find-chat-cleared-<appearance>`). Command-F and Esc are key commands Maestro cannot press: jest covers them (`ChatsFind.test.tsx`, `ChatSearch.test.tsx`, `chatRowTarget.test.ts`) and the hand checks below |
 | `regression/inbox` | the list as an inbox, behind Settings → Inbox → "Sort chats as an inbox" (off by default, so every other flow sees the grouped list): turned on with its two other rows appearing; every Demo chat in the inbox with no shelves and no group headers (w6, working, is a space card and never hides); w2 given "delegate the review" waits under "Working · 1" and returns above w1 when it finishes; Settle from w2's swipe with "Settled · Undo", and Undo; a long swipe on w3 settling it with no tap, its slim row under "Settled · 1", Unsettle; the menu holding Settle, Snooze…, "Don't settle automatically" and Rename; a short swipe on w4 opening Settle and Snooze without settling, Snooze → "In 1 hour", its slim row saying `1h` under "Snoozed · 1", Wake, "Woke" until it is opened; "Hide chats while they work" off keeping a working w2 in the inbox; both settings put back and the grouped list back. `scripts/e2e.sh` clears the Demo's chat prefs and both settings around it (screenshots `inbox-start`, `inbox-working`, `inbox-settled`, `inbox-swipe`, `inbox-snoozed`, `inbox-woke`, `inbox-not-hiding`, each `-<appearance>`) |
 | `regression/new-chat` | Start reachable with the keyboard up, Cancel |
 | `regression/omp` | an OMP chat read by its journal path, its folded tool run and provider-free model name, a reply, mute and unmute |
@@ -74,6 +75,23 @@ hand on an iPad (or an iPhone) with a keyboard, after a native build:
 - Command-V with a picture and text both on the pasteboard (a copied web page)
   pastes the text.
 - At four pictures, Command-V with a picture does nothing new.
+- Command-F puts the cursor in the chats search, with nothing focused (right
+  after launch, and after tapping away from a field), with the search already
+  focused, and with the composer of the chat open beside the list focused on
+  iPad, mid-prompt; the prompt is still there afterwards.
+- "Find chat" is listed while Command is held, on the chats screen.
+- Return in the search opens the first chat it found (pinned first, then
+  Needs you, Working, Idle; the first agent under a space card, not its
+  layout); with nothing found it opens nothing and the cursor stays in the
+  search.
+- Esc in the search empties it and leaves the field; Esc in the composer
+  does not touch the search. With a space's layout card pinned, Esc closes
+  the card, and Command-F works again right after; Command-F with the card
+  still pinned closes it and puts the cursor in the search.
+- On iPad, open a pane's terminal beside the list (it takes focus), then a
+  chat with nothing focused: Command-F still puts the cursor in the search.
+- With Settings or Hosts open over the chats, or a chat pushed on an iPhone,
+  Command-F does not reach the chats search.
 - On Android with a hardware keyboard, the same list with Enter for Return,
   Ctrl-Enter for Command-Return, Alt-Enter for Option-Return and Ctrl-V for
   Command-V (Android asks no "Allow Paste").

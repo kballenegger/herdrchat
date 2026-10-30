@@ -11,7 +11,8 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { Header } from '@/components/Header';
 import { Screen } from '@/components/Screen';
 import { agentRowKey, isAgentRow } from './agentRows';
-import { ChatListItem, type LayoutButton } from './ChatListItem';
+import { ChatListItem, openChatTarget, type LayoutButton } from './ChatListItem';
+import { firstChatRow } from './chatRowTarget';
 import { ChatSearch } from './ChatSearch';
 import { paneChats } from './chatGroups';
 import { paneTarget } from './paneTarget';
@@ -174,6 +175,13 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
     () => chatListRows(listMode, summaries, query, inbox, isTerminalAvailable),
     [listMode, summaries, query, inbox]
   );
+  // Return in the search field opens the first chat it found, as a tap on
+  // that row would; with nothing found it does nothing.
+  const openFirstChat = useCallback(() => {
+    const first = firstChatRow(rows);
+    if (first !== null) openChatTarget(first);
+  }, [rows]);
+  const clearQuery = useCallback(() => setQuery(''), []);
   const listExtra = useMemo(() => ({ open, reads, openTerminalKey, now: inbox.now }), [open, reads, openTerminalKey, inbox.now]);
   const insets = useSafeAreaInsets();
 
@@ -316,7 +324,9 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
           />
         ))}
 
-      {connection !== null && summaries.length > 0 && <ChatSearch query={query} onChange={setQuery} />}
+      {connection !== null && summaries.length > 0 && (
+        <ChatSearch query={query} onChange={setQuery} onSubmit={openFirstChat} onEscape={clearQuery} />
+      )}
 
       {connection === null ? (
         <EmptyState
