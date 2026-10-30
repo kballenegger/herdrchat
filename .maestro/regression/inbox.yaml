@@ -216,11 +216,12 @@ appId: dev.herdr.HerdrChat
       id: inbox-shelf-settled
     timeout: 5000
 
+# Unsettled, w3 is back at the top of the inbox, above where the list sat.
 # The menu holds everything the swipe does, Rename and Close too.
 - scrollUntilVisible:
     element:
       id: chat-row-w3
-    direction: DOWN
+    direction: UP
     centerElement: true
 - longPressOn:
     id: chat-row-w3
