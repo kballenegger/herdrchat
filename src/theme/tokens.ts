@@ -44,6 +44,8 @@ export const spacing = {
  * unrelated to touch.
  */
 export const size = {
+  /** A block quote's bar, beside its text. */
+  quoteBar: 3,
   /** Readable tablet column; narrow windows and phones still use their full width. */
   contentMaxWidth: 840,
   tabletBreakpoint: 768,
@@ -57,6 +59,12 @@ export const size = {
   unreadDot: 14,
   /** The status dot beside a thread's subtitle. */
   statusDot: 6,
+  /**
+   * A caption character's width, on average, at the default text size: how
+   * the thread header judges how many parts of its line fit whole. The
+   * system font's caption runs about 0.55 em a character.
+   */
+  captionCharWidth: 6.6,
   /**
    * The narrowest the empty channel opposite a bubble may get — what stops a
    * long message from running the full width of the screen.
@@ -514,6 +522,27 @@ export const motion = {
    * fade. Reduce Motion gets a plain hold-and-fade with the same meaning.
    */
   highlight: { in: 420, hold: 900, out: 700, reducedHold: 1400, reducedOut: 600 },
+  /** The typing dots: each dot starts `typingStagger` after the one before, and fades each way in `typingPulse`. */
+  typingStagger: 180,
+  typingPulse: 420,
+  /** One sweep of the indeterminate waiting bar, each way. */
+  waitingSweep: 1400,
+  /** One breath of the presence dot on a live chat, each way. */
+  presencePulse: 900,
+  /** The swipe hint: a rest, a nudge out, and back. */
+  swipeHint: { rest: 1200, out: 520, back: 420 },
+} as const;
+
+/**
+ * The on-tint white, washed over the outgoing bubble for Markdown inside it:
+ * a code or table fill, a rule, a table header, a quote's bar. The tint text
+ * is white in both palettes, so one set serves both.
+ */
+export const onTintWash = {
+  fill: 'rgba(255,255,255,0.18)',
+  line: 'rgba(255,255,255,0.22)',
+  header: 'rgba(255,255,255,0.25)',
+  quote: 'rgba(255,255,255,0.4)',
 } as const;
 
 /**
