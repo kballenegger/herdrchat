@@ -136,15 +136,9 @@ appId: dev.herdr.HerdrChat
       id: undo-notice-message
       text: Settled
     timeout: 3000
-# The shelves sit under the whole list, below the first screen of a phone.
-- scrollUntilVisible:
-    element:
-      id: inbox-shelf-settled
-    direction: DOWN
-- assertVisible:
-    id: inbox-shelf-settled
-    text: Settled · 1
-# Undo puts it back at the top, and the notice goes.
+# Undo puts it back at the top, and the notice goes. Undo within its five
+# seconds: the shelf it went to is checked after the next settle, further
+# down, since scrolling to it here outlasted the notice.
 - tapOn:
     id: undo-notice-undo
 - extendedWaitUntil:
