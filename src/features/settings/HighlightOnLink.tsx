@@ -13,7 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { motion, radius, spacing } from '@/theme/tokens';
 
 /** The sections a link can point at. Typed, so a stale link is a build error. */
-export const SETTINGS_SECTIONS = ['connection', 'appearance', 'conversations', 'notifications', 'storage', 'support', 'about', 'danger'] as const;
+export const SETTINGS_SECTIONS = ['connection', 'appearance', 'conversations', 'inbox', 'notifications', 'storage', 'support', 'about', 'danger'] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export function isSettingsSection(value: unknown): value is SettingsSection {

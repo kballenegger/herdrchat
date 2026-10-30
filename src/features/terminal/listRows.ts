@@ -94,15 +94,22 @@ export function withTerminalRows<S extends ChatSummary>(
 
 /**
  * The Agents view's rows, with each agent the app has no reader for as a
- * terminal row of its own, in the group its status puts it in. Spaces lists it
- * as a terminal row under its workspace; here it was in no list at all. It
- * hangs under no card, so it is drawn standalone, and a search finds it by its
- * agent, folder, title or workspace as it finds an agent's row.
+ * terminal row of its own. Spaces lists it as a terminal row under its
+ * workspace; here it was in no list at all. It hangs under no card, so it is
+ * drawn standalone, and a search finds it by its agent, folder, title or
+ * workspace as it finds an agent's row.
+ *
+ * With the list grouped (`inbox` off) it is in the group its status puts it
+ * in. As an inbox it is at the end of the inbox, after the chats, whatever it
+ * is doing: it has no conversation to settle, snooze or hold on the Working
+ * shelf, and a shelf that held it could not open it. With it there, the
+ * inbox is not "All clear".
  */
 export function withAgentTerminals<S extends ChatSummary>(
   rows: readonly ChatListItem<S>[],
   summaries: readonly S[],
-  query: string
+  query: string,
+  inbox = false
 ): ListItemWithTerminals<S>[] {
   const needle = query.trim().toLowerCase();
   const terminals = summaries.flatMap((summary) => summary.shellPanes
@@ -110,20 +117,26 @@ export function withAgentTerminals<S extends ChatSummary>(
       [pane.agent, agentName(pane.agent), pane.cwd, pane.title ?? '', summary.title].some((text) => text.toLowerCase().includes(needle))))
     .map((terminal): TerminalListItem<S> => ({ kind: 'terminal', summary, terminal, first: true, last: true, standalone: true })));
   if (terminals.length === 0) return [...rows];
-  const groupOf = (status: AgentStatus): ChatGroupId => (status === 'blocked' ? 'needs-you' : status === 'working' ? 'working' : 'idle');
-  const sections = new Map<ChatGroupId, ChatListItem<S>[]>();
-  let current: ChatGroupId | null = null;
-  for (const row of rows) {
-    if (row.kind === 'group') current = row.id;
-    if (current !== null) sections.set(current, [...(sections.get(current) ?? []), row]);
+  if (!inbox) {
+    const groupOf = (status: AgentStatus): ChatGroupId => (status === 'blocked' ? 'needs-you' : status === 'working' ? 'working' : 'idle');
+    const sections = new Map<ChatGroupId, ChatListItem<S>[]>();
+    let current: ChatGroupId | null = null;
+    for (const row of rows) {
+      if (row.kind === 'group') current = row.id;
+      if (current !== null) sections.set(current, [...(sections.get(current) ?? []), row]);
+    }
+    return CHAT_GROUPS.flatMap(({ id, title }): ListItemWithTerminals<S>[] => {
+      const [head, ...listed] = sections.get(id) ?? [];
+      const extra = terminals.filter((row) => groupOf(row.terminal.pane.agentStatus) === id);
+      if (extra.length === 0) return head === undefined ? [] : [head, ...listed];
+      const count = (head?.kind === 'group' ? head.count : 0) + extra.length;
+      return [{ kind: 'group', id, title, count }, ...listed, ...extra];
+    });
   }
-  return CHAT_GROUPS.flatMap(({ id, title }): ListItemWithTerminals<S>[] => {
-    const [head, ...listed] = sections.get(id) ?? [];
-    const extra = terminals.filter((row) => groupOf(row.terminal.pane.agentStatus) === id);
-    if (extra.length === 0) return head === undefined ? [] : [head, ...listed];
-    const count = (head?.kind === 'group' ? head.count : 0) + extra.length;
-    return [{ kind: 'group', id, title, count }, ...listed, ...extra];
-  });
+  const listed = rows.filter((row) => row.kind !== 'clear');
+  const shelves = listed.findIndex((row) => row.kind === 'shelf');
+  const at = shelves === -1 ? listed.length : shelves;
+  return [...listed.slice(0, at), ...terminals, ...listed.slice(at)];
 }
 
 /**

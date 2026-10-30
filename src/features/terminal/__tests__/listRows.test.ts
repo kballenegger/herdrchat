@@ -23,7 +23,8 @@ const chat = (workspaceId: string, panes: PaneSummary[], shellPanes: TerminalPan
 });
 
 const shape = (rows: ReturnType<typeof withTerminalRows>) => rows.map((row) =>
-  row.kind === 'group' ? row.id
+  row.kind === 'group' || row.kind === 'shelf' ? row.id
+    : row.kind === 'more' || row.kind === 'clear' ? row.kind
     : row.kind === 'chat' ? row.summary.workspaceId
       : row.kind === 'pane' ? `pane ${row.pane.paneId}${row.first ? ' first' : ''}${row.last ? ' last' : ''}`
         : row.kind === 'tab' ? `tab ${row.tabId}${row.label === null ? '' : ` "${row.label}"`}${row.first ? ' first' : ''}`

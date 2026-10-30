@@ -3,17 +3,20 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { publishMutedChats } from '@/features/notifications/mutedChats';
-import { prefSource, type ChatPref, type PrefRef } from '@/lib/chatPrefs';
+import { activePref, prefSource, type ChatPref, type ChatPrefChange, type PrefRef } from '@/lib/chatPrefs';
+import { NO_INBOX_PREF, type InboxPref } from '@/lib/inbox/inbox';
 import { errorText } from '@/lib/herdr/protocol';
 import { haptics } from '@/components/haptics';
 import { resolveConnection, type ServerConnection } from '@/state/connections';
-import { loadChatPrefs, saveChatPref } from '@/state/db';
+import { loadChatPrefs, restoreChatPref, saveChatPref } from '@/state/db';
+import { inboxClock } from '@/state/inboxClock';
 import { agentPrefRow } from './agentRows';
 import { paneChats } from './chatGroups';
 import { rowKey, type ListedChat } from './listedChat';
 
 /**
- * Pinned and muted chats on one host, and the two toggles.
+ * Pinned, muted, settled and snoozed chats on the listed hosts, and the
+ * changes to each.
  *
  * Both need the chat's session: a pin or mute belongs to a conversation, and
  * herdr hands its workspace slot to the next one (see `chatPrefs`). A chat
@@ -33,6 +36,13 @@ import { rowKey, type ListedChat } from './listedChat';
  * (`PaneRow`) is the same `PrefRow` as its row in Agents (`agentPrefRow`), so
  * the two views always agree about an agent. `pinnedAt` files those by the
  * same key the Agents view groups by (`agentRowKey`).
+ *
+ * Settling and snoozing go the other way for such an agent: they are its
+ * workspace's (`PrefRow.inboxRef`, the card's pref), because Spaces lists the
+ * agent under its card, in the card's section, and an agent settled on its
+ * own would still be listed in the inbox there. So a settle or snooze made
+ * on the card holds each of its agents in Agents, and one made on an agent in
+ * Agents holds its card and its siblings in both views.
  */
 export function useChatPrefs(
   db: SQLite.SQLiteDatabase,
@@ -48,6 +58,32 @@ export function useChatPrefs(
   canMute: (summary: PrefRow) => boolean;
   togglePin: (summary: PrefRow) => void;
   toggleMute: (summary: PrefRow) => void;
+  /**
+   * A row's inbox choices in force: its own pref's settle and snooze, and the
+   * pin that pins it, its own or one it inherits (`prefSource`).
+   */
+  inboxPrefOf: (summary: PrefRow) => InboxPref;
+  /**
+   * Change the inbox choices on a row's own pref, unpinning whatever pins it
+   * when `unpin` is set (settling or snoozing a pinned chat unpins it), and
+   * resolve with what it was, for Undo. Null when the row has no session to
+   * file a pref under.
+   */
+  changeInbox: (summary: PrefRow, change: InboxWrite, options?: { unpin?: boolean }) => Promise<PrefSnapshot | null>;
+  /** Put back what `changeInbox` changed, exactly. */
+  restore: (snapshot: PrefSnapshot) => Promise<void>;
+  /**
+   * Whether a host's prefs have been read from the database. Until then
+   * every row reads as unpinned, unsettled and unsnoozed, which is not what
+   * is stored: the inbox's rules must not act on it.
+   */
+  isLoaded: (connectionId: string) => boolean;
+  /**
+   * Whether a row's inbox choices are its own pref's. An agent of several is
+   * settled and snoozed with its workspace (`inboxRef`), whose card's row
+   * the rules act on.
+   */
+  ownsInbox: (summary: PrefRow) => boolean;
   /** A mute saved here that could not reach the host. */
   error: string | null;
   clearError: () => void;
@@ -142,8 +178,52 @@ export function useChatPrefs(
     [db, sourceOf, reload]
   );
 
+  const inboxPrefOf = useCallback(
+    (summary: PrefRow): InboxPref => inboxPrefIn(prefs.get(summary.connectionId) ?? NO_PREFS, summary),
+    [prefs]
+  );
+
+  const changeInbox = useCallback(
+    async (summary: PrefRow, write: InboxWrite, options: { unpin?: boolean } = {}): Promise<PrefSnapshot | null> => {
+      const own = inboxRefOf(summary);
+      if (own.sessionSig === null) return null;
+      // From the database rather than the loaded map: a write a moment ago
+      // (an Undo, a rule) may not have reloaded yet, and a rule decided on
+      // a map that had not loaded at all must be decided again on what is
+      // really stored.
+      const stored = await loadChatPrefs(db, summary.connectionId);
+      const change = typeof write === 'function' ? write(inboxPrefIn(stored, summary)) : write;
+      if (change === null) return null;
+      const pin = options.unpin === true ? prefSource(stored, refsOf(summary), 'pin') : null;
+      const keys = [...new Set([own.key, ...(pin === null ? [] : [pin.key])])];
+      const snapshot: PrefSnapshot = { connectionId: summary.connectionId, prefs: keys.map((key) => ({ key, pref: stored.get(key) ?? null })) };
+      if (pin !== null && pin.key !== own.key && pin.sessionSig !== null) {
+        await saveChatPref(db, summary.connectionId, pin.key, pin.sessionSig, { pinnedAt: null });
+      }
+      await saveChatPref(db, summary.connectionId, own.key, own.sessionSig, pin !== null && pin.key === own.key ? { ...change, pinnedAt: null } : change);
+      await reload();
+      inboxClock.touch();
+      return snapshot;
+    },
+    [db, reload]
+  );
+
+  const restore = useCallback(
+    async (snapshot: PrefSnapshot) => {
+      for (const { key, pref } of snapshot.prefs) await restoreChatPref(db, snapshot.connectionId, key, pref);
+      await reload();
+      inboxClock.touch();
+    },
+    [db, reload]
+  );
+
   return {
     pinnedAt,
+    inboxPrefOf,
+    changeInbox,
+    restore,
+    isLoaded: useCallback((connectionId: string) => prefs.has(connectionId), [prefs]),
+    ownsInbox: useCallback((summary: PrefRow) => summary.inboxRef === undefined, []),
     isPinned: (summary) => sourceOf(summary, 'pin') !== null,
     isMuted: (summary) => canMute(summary) && sourceOf(summary, 'mute') !== null,
     canMute,
@@ -156,6 +236,48 @@ export function useChatPrefs(
 
 const NO_PREFS: ReadonlyMap<string, ChatPref> = new Map();
 
+/** The stored prefs a change touched, as they were: what Undo writes back. */
+export interface PrefSnapshot {
+  connectionId: string;
+  prefs: readonly { key: string; pref: ChatPref | null }[];
+}
+
+/**
+ * A change to a row's inbox choices, or a function that decides it from the
+ * stored choices at the moment of writing (null: nothing to write).
+ */
+export type InboxWrite = ChatPrefChange | ((stored: InboxPref) => ChatPrefChange | null);
+
+/**
+ * A row's inbox choices in a host's prefs: the settle and snooze of the pref
+ * they are filed on (`inboxRefOf`), and the pin that pins it, its own or one
+ * it inherits (`prefSource`).
+ */
+function inboxPrefIn(prefs: ReadonlyMap<string, ChatPref>, summary: PrefRow): InboxPref {
+  const ref = inboxRefOf(summary);
+  const filed = activePref(prefs, ref.key, ref.sessionSig);
+  const pin = prefSource(prefs, refsOf(summary), 'pin');
+  const pinnedAt = pin === null ? null : prefs.get(pin.key)?.pinnedAt ?? null;
+  return { ...NO_INBOX_PREF, ...(filed === null ? {} : inboxPart(filed)), pinnedAt };
+}
+
+/** Where a row's settle and snooze are filed: its workspace card's for an agent of several, else its own. */
+function inboxRefOf(summary: PrefRow): PrefRef {
+  return summary.inboxRef ?? { key: prefKey(summary), sessionSig: summary.sessionSig };
+}
+
+/** A pref's inbox choices, without its pin (which may be inherited) or session. */
+function inboxPart(pref: ChatPref): Omit<InboxPref, 'pinnedAt'> {
+  return {
+    settledAt: pref.settledAt,
+    settledReason: pref.settledReason,
+    unsettledAt: pref.unsettledAt,
+    snoozedUntil: pref.snoozedUntil,
+    snoozedAt: pref.snoozedAt,
+    autoSettle: pref.autoSettle,
+  };
+}
+
 /**
  * What a pin or mute is made on: a row's connection, its session, and the
  * chat it names, the workspace's unless `chatKey` says otherwise. `inherits`
@@ -164,6 +286,8 @@ const NO_PREFS: ReadonlyMap<string, ChatPref> = new Map();
 export type PrefRow = Pick<ListedChat, 'connectionId' | 'workspaceId' | 'sessionSig'> & {
   chatKey?: string;
   inherits?: readonly PrefRef[];
+  /** Where it is settled and snoozed, when not on its own pref (`agentPrefRow`). */
+  inboxRef?: PrefRef;
 };
 
 /** The key a row's pref is filed under: its `chatKey`, or its workspace's. */

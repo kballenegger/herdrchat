@@ -10,6 +10,8 @@ import { terminalRowParams, type ListItemWithTerminals } from '@/features/termin
 import { openTerminal } from '@/features/terminal/navigation';
 import { useTheme } from '@/theme/ThemeProvider';
 import { minTouchTarget, spacing } from '@/theme/tokens';
+import { canSnooze, wakeLabel } from '@/lib/inbox/snooze';
+import type { SheetAction } from '@/components/ActionSheet';
 
 import { agentPrefRow, agentTestKey, isAgentRow, isAgentUnread } from './agentRows';
 import { spaceCardMode } from './chatGroups';
@@ -17,7 +19,13 @@ import { isChatUnread, isPaneUnread } from './chatUnread';
 import { openChat } from './navigation';
 import { PaneRow } from './PaneRow';
 import { paneTarget } from './paneTarget';
-import { rowTitle } from './rowText';
+import { rowTitle, spaceTitle } from './rowText';
+import { formatListTime, type RowAction } from './ChatRow';
+import { AllClearRow, ShelfHeader, ShowMoreRow } from './ShelfHeader';
+import type { TrailingSwipe } from './SwipeableChatRow';
+import type { InboxTarget, useInboxActions } from './useInboxActions';
+import type { InboxSection } from '@/lib/inbox/inbox';
+import { useInboxShelves } from '@/state/inboxShelves';
 import { TabDivider } from './TabDivider';
 import { TerminalRow } from './TerminalRow';
 
@@ -31,13 +39,17 @@ export interface LayoutButton {
 }
 
 /**
- * One row of the chat list: a group's header, a tab's divider, a pane's
- * terminal, an agent's row under its workspace, or a chat.
+ * One row of the chat list: Pinned's header, a shelf's header, "Show N
+ * more", "All clear", a tab's divider, a pane's terminal, an agent's row
+ * under its workspace, or a chat.
  */
-export function ChatListItem({ row, prefs, actions, open, reads, openTerminalKey, layout, onSwiped }: {
+export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, openTerminalKey, layout, onSwiped }: {
   row: ListItemWithTerminals<ListedChat>;
   prefs: ReturnType<typeof useChatPrefs>;
   actions: ReturnType<typeof useChatActions<ListedChat>>;
+  inbox: ReturnType<typeof useInboxActions>;
+  /** The inbox's time, which a snoozed row's wake label counts down to. */
+  now: number;
   /** The chat open in the detail, which its row shows as selected. */
   open: OpenChat | null;
   reads: ReadsByConnection;
@@ -59,6 +71,11 @@ export function ChatListItem({ row, prefs, actions, open, reads, openTerminalKey
       <Text variant="caption" mono color="secondary">{row.count}</Text>
     </View>
   );
+  if (row.kind === 'shelf') return (
+    <ShelfHeader id={row.id} title={row.title} count={row.count} expanded={row.expanded} onPress={() => useInboxShelves.getState().toggle(row.id)} />
+  );
+  if (row.kind === 'more') return <ShowMoreRow count={row.count} onPress={() => useInboxShelves.getState().showMore()} />;
+  if (row.kind === 'clear') return <AllClearRow />;
   if (row.kind === 'tab') return <TabDivider summary={row.summary} tabId={row.tabId} label={row.label} first={row.first} />;
   if (row.kind === 'terminal') {
     const { summary, terminal } = row;
@@ -91,10 +108,12 @@ export function ChatListItem({ row, prefs, actions, open, reads, openTerminalKey
   // another's.
   const openHere = openFor(open, item);
   const rowReads = readsOf(reads, item);
-  const manage = () => actions.manageChat(item, personal ? [
+  // The pin and mute, then the inbox's own: what the swipe offers, and the
+  // two that only the menu does.
+  const pinMute: SheetAction[] = personal ? [
     { label: pinned ? 'Unpin' : 'Pin', onPress: () => prefs.togglePin(item) },
     ...(mutable ? [{ label: muted ? 'Unmute notifications' : 'Mute notifications', onPress: () => prefs.toggleMute(item) }] : []),
-  ] : []);
+  ] : [];
   if (row.kind === 'pane') {
     const { pane } = row;
     const target = paneTarget(item, pane);
@@ -138,6 +157,37 @@ export function ChatListItem({ row, prefs, actions, open, reads, openTerminalKey
   // chat (`spaceCardMode`) shows its layout, and is never the
   // selection: the agent rows under it are.
   const space = agent === null && spaceCardMode(item) === 'space';
+  // Null while the list is not an inbox (the setting off): the row, its
+  // swipe (Rename and Close), its menu and its VoiceOver actions are as they
+  // always were.
+  const section = row.section;
+  const rename = () => actions.renameChat(item);
+  const close = () => actions.closeChat(item);
+  const pref = prefs.inboxPrefOf(item);
+  // An agent of several is settled with its workspace (`inboxRef`), whose
+  // newest line is what the settle has to be newer than.
+  const settles = agent?.pane != null ? agent.workspace : item;
+  const target = { row: item, title: space ? spaceTitle(item) : rowTitle(item), preview: settles.preview };
+  const choices = personal && section !== null ? inboxChoices(section, item.status, target, inbox) : null;
+  const slim = section === 'snoozed' || section === 'settled';
+  const trailingLabel = section === 'snoozed' && pref.snoozedUntil !== null ? wakeLabel(pref.snoozedUntil, now)
+    : section === 'settled' && pref.settledAt !== null ? formatListTime(pref.settledAt) : undefined;
+  const menu: SheetAction[] = [
+    ...pinMute,
+    ...(choices === null ? [] : [
+      ...choices.menu,
+      pref.autoSettle
+        ? { label: "Don't settle automatically", onPress: () => inbox.setAutoSettle(target, false) }
+        : { label: 'Settle automatically', onPress: () => inbox.setAutoSettle(target, true) },
+    ]),
+  ];
+  const rowActions: RowAction[] = [
+    ...(personal ? [{ name: 'pin', label: pinned ? 'Unpin' : 'Pin', run: () => prefs.togglePin(item) }] : []),
+    ...(mutable ? [{ name: 'mute', label: muted ? 'Unmute notifications' : 'Mute notifications', run: () => prefs.toggleMute(item) }] : []),
+    ...(choices === null ? [] : choices.actions),
+    { name: 'rename', label: 'Rename workspace', run: rename },
+    { name: 'close', label: 'Close chat', run: close },
+  ];
   return (
     <SwipeableChatRow
       summary={item}
@@ -153,10 +203,13 @@ export function ChatListItem({ row, prefs, actions, open, reads, openTerminalKey
         openChat(item.connectionId, item.workspaceId, rowTitle(item), agent?.pane?.paneId,
           agent?.pane != null ? agent.pane.sessionSig : item.sessionSig);
       }}
-      onLongPress={manage}
+      onLongPress={() => actions.manageChat(item, menu)}
       onSwiped={onSwiped}
-      onRename={() => actions.renameChat(item)}
-      onClose={() => actions.closeChat(item)}
+      trailing={section === null ? renameCloseSwipe(rename, close) : choices?.swipe}
+      actions={rowActions}
+      variant={slim ? 'slim' : 'card'}
+      trailingLabel={trailingLabel}
+      woke={row.woke}
       space={space ? {
         onOpenLayout: (anchor) => layout.open(item, anchor),
         onHoverLayout: layout.pointer ? (anchor) => layout.hover(item, anchor) : undefined,
@@ -164,4 +217,58 @@ export function ChatListItem({ row, prefs, actions, open, reads, openTerminalKey
       } : undefined}
     />
   );
+}
+
+/**
+ * What a chat in a section can do in the inbox, as a swipe, as menu rows and
+ * as VoiceOver actions: Settle and Snooze from the inbox (no Snooze while it
+ * asks, which would wake it at once), Unsettle from Settled, Wake from
+ * Snoozed.
+ */
+function inboxChoices(
+  section: InboxSection,
+  status: ListedChat['status'],
+  target: InboxTarget,
+  inbox: ReturnType<typeof useInboxActions>
+): { swipe: TrailingSwipe; menu: SheetAction[]; actions: RowAction[] } {
+  if (section === 'settled') {
+    const run = () => inbox.unsettle(target);
+    return {
+      swipe: { primary: { id: 'unsettle', label: 'Unsettle', symbol: 'arrow.uturn.backward', tone: 'tint', run }, full: true },
+      menu: [{ label: 'Unsettle', onPress: run }],
+      actions: [{ name: 'unsettle', label: 'Unsettle', run }],
+    };
+  }
+  if (section === 'snoozed') {
+    const run = () => inbox.wake(target);
+    return {
+      swipe: { primary: { id: 'wake', label: 'Wake', symbol: 'alarm', tone: 'tint', run }, full: true },
+      menu: [{ label: 'Wake', onPress: run }],
+      actions: [{ name: 'wake', label: 'Wake', run }],
+    };
+  }
+  const settle = () => inbox.settle(target);
+  const snooze = () => inbox.snooze(target);
+  const snoozable = canSnooze(status);
+  return {
+    swipe: {
+      primary: { id: 'settle', label: 'Settle', symbol: 'checkmark.circle', tone: 'tint', run: settle },
+      secondary: snoozable ? { id: 'snooze', label: 'Snooze', symbol: 'clock', tone: 'neutral', run: snooze } : undefined,
+      full: true,
+    },
+    menu: [{ label: 'Settle', onPress: settle }, ...(snoozable ? [{ label: 'Snooze…', onPress: snooze }] : [])],
+    actions: [{ name: 'settle', label: 'Settle', run: settle }, ...(snoozable ? [{ name: 'snooze', label: 'Snooze', run: snooze }] : [])],
+  };
+}
+
+/** Rename and Close, the trailing swipe while the list is not an inbox. */
+function renameCloseSwipe(onRename: () => void, onClose: () => void): TrailingSwipe {
+  return {
+    // "Workspace" under the pencil, not "Rename": a row titled by its
+    // session no longer shows the workspace label this renames, and
+    // "Rename workspace" does not fit the panel. VoiceOver hears it whole.
+    secondary: { id: 'rename', label: 'Workspace', accessibilityLabel: 'Rename workspace', symbol: 'pencil', tone: 'neutral', run: onRename },
+    primary: { id: 'close', label: 'Close', symbol: 'xmark', tone: 'destructive', run: onClose },
+    full: false,
+  };
 }

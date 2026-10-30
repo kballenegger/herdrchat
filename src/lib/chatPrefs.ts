@@ -1,5 +1,8 @@
+import { NO_INBOX_PREF, type InboxPref } from './inbox/inbox';
+
 /**
- * Pinned and muted chats: choices made on this phone about one conversation.
+ * Pinned, muted, settled and snoozed chats: choices made on this phone about
+ * one conversation (`inbox/inbox.ts` for the last two).
  *
  * Kept per workspace but stamped with the session, like read markers: herdr
  * reuses workspace slots, and a new chat landing in a pinned or muted slot
@@ -7,12 +10,86 @@
  * not in force; it is replaced the next time that slot is pinned or muted.
  */
 
-export interface ChatPref {
+export interface ChatPref extends InboxPref {
   /** `sessionSignature` of the chat when the choice was made. */
   sessionSig: string;
-  /** When it was pinned, which orders the pinned group; null when not pinned. */
-  pinnedAt: number | null;
   muted: boolean;
+}
+
+/** A pref with nothing chosen, for a session: what a row with no stored pref is. */
+export function emptyPref(sessionSig: string): ChatPref {
+  return { ...NO_INBOX_PREF, sessionSig, muted: false };
+}
+
+/** Whether a pref chooses nothing, so its row can go. */
+export function isEmptyPref(pref: Omit<ChatPref, 'sessionSig'>): boolean {
+  return pref.pinnedAt === null && !pref.muted && pref.settledAt === null && pref.unsettledAt === null &&
+    pref.snoozedUntil === null && pref.snoozedAt === null && pref.autoSettle;
+}
+
+/** A change to a pref: any of its choices. */
+export type ChatPrefChange = Partial<Omit<ChatPref, 'sessionSig'>>;
+
+/**
+ * A pref with a change made: on the stored pref when it is for the same
+ * session, on an empty one when it was left by an earlier chat in the slot,
+ * whose other choices do not carry over.
+ */
+export function applyPrefChange(current: ChatPref | undefined, sessionSig: string, change: ChatPrefChange): ChatPref {
+  const base = current !== undefined && current.sessionSig === sessionSig ? current : emptyPref(sessionSig);
+  const next: ChatPref = { ...base };
+  for (const [key, value] of Object.entries(change) as [keyof ChatPrefChange, unknown][]) {
+    if (value !== undefined) (next as unknown as Record<string, unknown>)[key] = value;
+  }
+  return next;
+}
+
+/** A `chat_prefs` row as SQLite hands it back. */
+export interface ChatPrefRow {
+  workspace_id: string;
+  session_sig: string;
+  pinned_at: number | null;
+  muted: number;
+  /** Null on a row read before the inbox's columns were added (never, once migrated). */
+  settled_at: number | null;
+  settled_reason: string | null;
+  unsettled_at: number | null;
+  snoozed_until: number | null;
+  snoozed_at: number | null;
+  auto_settle: number | null;
+}
+
+/** A stored row to a pref. An unknown reason is the person's: they settled it. */
+export function decodeChatPrefRow(row: ChatPrefRow): ChatPref {
+  // `?? null`: a row selected without a column (or a driver that leaves a
+  // NULL out) reads as nothing chosen.
+  const settledAt = row.settled_at ?? null;
+  return {
+    sessionSig: row.session_sig,
+    pinnedAt: row.pinned_at ?? null,
+    muted: row.muted === 1,
+    settledAt,
+    settledReason: settledAt === null ? null : row.settled_reason === 'auto' ? 'auto' : 'user',
+    unsettledAt: row.unsettled_at ?? null,
+    snoozedUntil: row.snoozed_until ?? null,
+    snoozedAt: row.snoozed_at ?? null,
+    autoSettle: row.auto_settle !== 0,
+  };
+}
+
+/** A pref to the row's values, as `restoreChatPref` writes them. */
+export function encodeChatPrefRow(pref: ChatPref): Omit<ChatPrefRow, 'workspace_id' | 'auto_settle'> & { auto_settle: number } {
+  return {
+    session_sig: pref.sessionSig,
+    pinned_at: pref.pinnedAt,
+    muted: pref.muted ? 1 : 0,
+    settled_at: pref.settledAt,
+    settled_reason: pref.settledAt === null ? null : pref.settledReason ?? 'user',
+    unsettled_at: pref.unsettledAt,
+    snoozed_until: pref.snoozedUntil,
+    snoozed_at: pref.snoozedAt,
+    auto_settle: pref.autoSettle ? 1 : 0,
+  };
 }
 
 /** The pref in force for a chat, or null. A chat with no session id yet has none. */

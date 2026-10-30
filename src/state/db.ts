@@ -1,6 +1,14 @@
 import * as SQLite from 'expo-sqlite';
 
-import type { ChatPref } from '@/lib/chatPrefs';
+import {
+  applyPrefChange,
+  decodeChatPrefRow,
+  encodeChatPrefRow,
+  isEmptyPref,
+  type ChatPref,
+  type ChatPrefChange,
+  type ChatPrefRow,
+} from '@/lib/chatPrefs';
 import type { ThreadRead } from '@/lib/unread';
 import type { ServerConnection } from './connections';
 
@@ -119,7 +127,22 @@ export async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   `);
 
   await addColumnIfMissing(db, 'connections', 'session_name', "TEXT NOT NULL DEFAULT ''");
+  // The inbox (`src/lib/inbox`): settled and snoozed chats, and the chats
+  // told never to settle by themselves.
+  for (const [column, definition] of CHAT_PREF_INBOX_COLUMNS) {
+    await addColumnIfMissing(db, 'chat_prefs', column, definition);
+  }
 }
+
+/** The inbox's columns on `chat_prefs`, added to a database made before them. */
+export const CHAT_PREF_INBOX_COLUMNS: readonly (readonly [string, string])[] = [
+  ['settled_at', 'INTEGER'],
+  ['settled_reason', 'TEXT'],
+  ['unsettled_at', 'INTEGER'],
+  ['snoozed_until', 'INTEGER'],
+  ['snoozed_at', 'INTEGER'],
+  ['auto_settle', 'INTEGER NOT NULL DEFAULT 1'],
+];
 
 /**
  * `ALTER TABLE … ADD COLUMN`, made idempotent.
@@ -258,59 +281,73 @@ export async function loadThreadReads(
   );
 }
 
-// MARK: - Pinned and muted chats
+// MARK: - Chat prefs: pinned, muted, settled, snoozed
 
-/** Every pin and mute for one server, by workspace. */
+/** Every chat pref for one server, by workspace (or chat key). */
 export async function loadChatPrefs(
   db: SQLite.SQLiteDatabase,
   connectionId: string
 ): Promise<Map<string, ChatPref>> {
-  const rows = await db.getAllAsync<{
-    workspace_id: string;
-    session_sig: string;
-    pinned_at: number | null;
-    muted: number;
-  }>(
-    'SELECT workspace_id, session_sig, pinned_at, muted FROM chat_prefs WHERE connection_id = ?',
+  const rows = await db.getAllAsync<ChatPrefRow>(
+    `SELECT workspace_id, session_sig, pinned_at, muted, settled_at, settled_reason, unsettled_at,
+            snoozed_until, snoozed_at, auto_settle
+     FROM chat_prefs WHERE connection_id = ?`,
     connectionId
   );
-  return new Map(
-    rows.map((row) => [
-      row.workspace_id,
-      { sessionSig: row.session_sig, pinnedAt: row.pinned_at, muted: row.muted === 1 },
-    ])
-  );
+  return new Map(rows.map((row) => [row.workspace_id, decodeChatPrefRow(row)]));
 }
 
 /**
- * Pin or mute a chat, or undo either. A row left over from an earlier chat in
- * the slot is replaced outright, so its other choice does not carry over.
+ * Change a chat's pref: pin or mute it, settle or snooze it, or undo any of
+ * those. A row left over from an earlier chat in the slot is replaced
+ * outright, so its other choices do not carry over (`applyPrefChange`).
  */
 export async function saveChatPref(
   db: SQLite.SQLiteDatabase,
   connectionId: string,
   workspaceId: string,
   sessionSig: string,
-  change: { pinnedAt?: number | null; muted?: boolean }
+  change: ChatPrefChange
 ): Promise<void> {
   const current = (await loadChatPrefs(db, connectionId)).get(workspaceId);
-  const base = current !== undefined && current.sessionSig === sessionSig ? current : { pinnedAt: null, muted: false };
-  const pinnedAt = change.pinnedAt !== undefined ? change.pinnedAt : base.pinnedAt;
-  const muted = change.muted ?? base.muted;
-  if (pinnedAt === null && !muted) {
+  await restoreChatPref(db, connectionId, workspaceId, applyPrefChange(current, sessionSig, change));
+}
+
+/**
+ * Write a chat's pref exactly as given, or delete it (null, or one that
+ * chooses nothing). What Undo puts back.
+ */
+export async function restoreChatPref(
+  db: SQLite.SQLiteDatabase,
+  connectionId: string,
+  workspaceId: string,
+  pref: ChatPref | null
+): Promise<void> {
+  if (pref === null || isEmptyPref(pref)) {
     await db.runAsync('DELETE FROM chat_prefs WHERE connection_id = ? AND workspace_id = ?', connectionId, workspaceId);
     return;
   }
+  const row = encodeChatPrefRow(pref);
   await db.runAsync(
-    `INSERT INTO chat_prefs (connection_id, workspace_id, session_sig, pinned_at, muted)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO chat_prefs (connection_id, workspace_id, session_sig, pinned_at, muted, settled_at, settled_reason,
+                             unsettled_at, snoozed_until, snoozed_at, auto_settle)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (connection_id, workspace_id) DO UPDATE SET
-       session_sig = excluded.session_sig, pinned_at = excluded.pinned_at, muted = excluded.muted`,
+       session_sig = excluded.session_sig, pinned_at = excluded.pinned_at, muted = excluded.muted,
+       settled_at = excluded.settled_at, settled_reason = excluded.settled_reason,
+       unsettled_at = excluded.unsettled_at, snoozed_until = excluded.snoozed_until,
+       snoozed_at = excluded.snoozed_at, auto_settle = excluded.auto_settle`,
     connectionId,
     workspaceId,
-    sessionSig,
-    pinnedAt,
-    muted ? 1 : 0
+    row.session_sig,
+    row.pinned_at,
+    row.muted,
+    row.settled_at,
+    row.settled_reason,
+    row.unsettled_at,
+    row.snoozed_until,
+    row.snoozed_at,
+    row.auto_settle
   );
 }
 

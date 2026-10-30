@@ -1,3 +1,4 @@
+import { NO_INBOX_PREF } from '@/lib/inbox/inbox';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -43,7 +44,7 @@ beforeEach(() => {
 // Both rows are `w1`. Pins were saved under the selected host's id, so a pin
 // on klaw's w1 landed on Gimel's w1.
 it('files a pin under the row\'s own connection, and reads it back by row', async () => {
-  mockSaved.set(klawId, new Map([['w1', { sessionSig: 'sig-klaw', pinnedAt: 5, muted: false }]]));
+  mockSaved.set(klawId, new Map([['w1', { ...NO_INBOX_PREF, sessionSig: 'sig-klaw', pinnedAt: 5, muted: false }]]));
   const { result } = await renderHook(() => useChatPrefs(db, host, summaries, [host.id, klawId]));
   await waitFor(() => expect(result.current.pinnedAt.size).toBe(1));
   expect(jest.mocked(loadChatPrefs).mock.calls.map((call) => call[1])).toEqual(expect.arrayContaining([host.id, klawId]));
@@ -60,7 +61,7 @@ it('files a pin under the row\'s own connection, and reads it back by row', asyn
 // Every host has its own notifier: a mute on another host's row is saved
 // under that host and told to it, not to the selected one.
 it('mutes another host\'s row on that host', async () => {
-  mockSaved.set(klawId, new Map([['w1', { sessionSig: 'sig-klaw', pinnedAt: null, muted: true }]]));
+  mockSaved.set(klawId, new Map([['w1', { ...NO_INBOX_PREF, sessionSig: 'sig-klaw', pinnedAt: null, muted: true }]]));
   const { result } = await renderHook(() => useChatPrefs(db, host, summaries, [host.id, klawId]));
   await waitFor(() => expect(loadChatPrefs).toHaveBeenCalledTimes(2));
   expect(result.current.isMuted(klawRow)).toBe(true);
@@ -96,7 +97,7 @@ describe('an agent\'s own pin and mute', () => {
   const p2Row = { connectionId: host.id, workspaceId: 'w6', sessionSig: 'sig-w6:p2', chatKey: 'w6/w6:p2' };
 
   it('reads and writes the agent\'s pin under its chat key and session', async () => {
-    mockSaved.set(host.id, new Map([['w6/w6:p2', { sessionSig: 'sig-w6:p2', pinnedAt: 7, muted: false }]]));
+    mockSaved.set(host.id, new Map([['w6/w6:p2', { ...NO_INBOX_PREF, sessionSig: 'sig-w6:p2', pinnedAt: 7, muted: false }]]));
     const { result } = await renderHook(() => useChatPrefs(db, host, listed, [host.id]));
     await waitFor(() => expect(result.current.pinnedAt.size).toBe(1));
     expect([...result.current.pinnedAt.entries()]).toEqual([[`${host.id}\nw6/w6:p2`, 7]]);
@@ -117,9 +118,9 @@ describe('an agent\'s own pin and mute', () => {
     const agentsRow = agentRows(listed)[1]!;
     expect({ ...spacesRow }).toEqual({
       connectionId: agentsRow.connectionId, workspaceId: agentsRow.workspaceId, sessionSig: agentsRow.sessionSig,
-      chatKey: agentsRow.chatKey, inherits: agentsRow.inherits,
+      chatKey: agentsRow.chatKey, inherits: agentsRow.inherits, inboxRef: agentsRow.inboxRef,
     });
-    mockSaved.set(host.id, new Map([['w6/w6:p2', { sessionSig: 'sig-w6:p2', pinnedAt: 7, muted: true }]]));
+    mockSaved.set(host.id, new Map([['w6/w6:p2', { ...NO_INBOX_PREF, sessionSig: 'sig-w6:p2', pinnedAt: 7, muted: true }]]));
     const { result } = await renderHook(() => useChatPrefs(db, host, listed, [host.id]));
     await waitFor(() => expect(result.current.pinnedAt.size).toBe(1));
     for (const row of [spacesRow, agentsRow]) {
@@ -131,7 +132,7 @@ describe('an agent\'s own pin and mute', () => {
   // Pinned and muted on its card in Spaces: both agents are, in Agents too,
   // and unpinning or unmuting either undoes the card's, which is what holds it.
   it('pins and mutes each agent by its workspace card, and undoes the card\'s from an agent', async () => {
-    mockSaved.set(host.id, new Map([['w6', { sessionSig: 'sig-w6:p1,sig-w6:p2', pinnedAt: 4, muted: true }]]));
+    mockSaved.set(host.id, new Map([['w6', { ...NO_INBOX_PREF, sessionSig: 'sig-w6:p1,sig-w6:p2', pinnedAt: 4, muted: true }]]));
     const p1Row = agentPrefRow(api, api.panes[0]!);
     const { result } = await renderHook(() => useChatPrefs(db, host, listed, [host.id]));
     await waitFor(() => expect(result.current.pinnedAt.size).toBe(3));
@@ -149,7 +150,7 @@ describe('an agent\'s own pin and mute', () => {
   // Pinned and muted in Agents while it was w2's only agent (filed under the
   // workspace, on its session), then a second agent started beside it.
   it('keeps the pin and mute an agent got while it was its workspace\'s only one', async () => {
-    mockSaved.set(host.id, new Map([['w6', { sessionSig: 'sig-w6:p2', pinnedAt: 9, muted: true }]]));
+    mockSaved.set(host.id, new Map([['w6', { ...NO_INBOX_PREF, sessionSig: 'sig-w6:p2', pinnedAt: 9, muted: true }]]));
     const { result } = await renderHook(() => useChatPrefs(db, host, listed, [host.id]));
     await waitFor(() => expect(result.current.pinnedAt.size).toBe(1));
     expect([...result.current.pinnedAt.keys()]).toEqual([`${host.id}\nw6/w6:p2`]);
@@ -164,7 +165,7 @@ describe('an agent\'s own pin and mute', () => {
 
   // herdr recycles panes: a new conversation in w6:p2 is not the pinned one.
   it('holds no pin made on an earlier session in the pane', async () => {
-    mockSaved.set(host.id, new Map([['w6/w6:p2', { sessionSig: 'sig-old', pinnedAt: 7, muted: false }]]));
+    mockSaved.set(host.id, new Map([['w6/w6:p2', { ...NO_INBOX_PREF, sessionSig: 'sig-old', pinnedAt: 7, muted: false }]]));
     const { result } = await renderHook(() => useChatPrefs(db, host, listed, [host.id]));
     await waitFor(() => expect(loadChatPrefs).toHaveBeenCalled());
     expect(result.current.pinnedAt.size).toBe(0);

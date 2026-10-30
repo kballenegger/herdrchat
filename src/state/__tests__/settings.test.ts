@@ -1,3 +1,4 @@
+import { decodeSettleAfterDays } from '@/lib/inbox/autoSettle';
 import { decodeListMode } from '@/lib/listModes';
 import { SETTINGS_DEFAULTS, decodeBool, encodeBool, settingsSnapshot, useSettings } from '../settings';
 
@@ -43,5 +44,35 @@ describe('listMode', () => {
     expect(decodeListMode(String(useSettings.getState().listMode))).toBe('agents');
     useSettings.getState().hydrate({ listMode: decodeListMode(null) });
     expect(useSettings.getState().listMode).toBe('spaces');
+  });
+});
+
+describe('the inbox', () => {
+  afterEach(() => useSettings.getState().hydrate(SETTINGS_DEFAULTS));
+
+  // Off by default: the list is the one it always was until someone turns it on.
+  it('is off by default, and round-trips', () => {
+    expect(SETTINGS_DEFAULTS.inbox).toBe(false);
+    expect(useSettings.getState().inbox).toBe(false);
+    expect(decodeBool(null, SETTINGS_DEFAULTS.inbox)).toBe(false);
+    expect(decodeBool(encodeBool(true), SETTINGS_DEFAULTS.inbox)).toBe(true);
+    useSettings.getState().set('inbox', true);
+    expect(settingsSnapshot().inbox).toBe(true);
+  });
+
+  // Working chats wait under the list, and untouched ones settle after three days.
+  it('hides working chats and settles after three days by default', () => {
+    expect(SETTINGS_DEFAULTS.hideWorking).toBe(true);
+    expect(SETTINGS_DEFAULTS.settleAfterDays).toBe(3);
+  });
+
+  it('round-trips through its stored form and into the snapshot', () => {
+    expect(decodeBool(encodeBool(false), SETTINGS_DEFAULTS.hideWorking)).toBe(false);
+    expect(decodeBool(null, SETTINGS_DEFAULTS.hideWorking)).toBe(true);
+    expect(decodeSettleAfterDays(String(7))).toBe(7);
+    expect(decodeSettleAfterDays(null)).toBe(3);
+    useSettings.getState().set('hideWorking', false);
+    useSettings.getState().set('settleAfterDays', 14);
+    expect(settingsSnapshot()).toMatchObject({ hideWorking: false, settleAfterDays: 14 });
   });
 });

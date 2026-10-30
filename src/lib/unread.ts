@@ -48,3 +48,13 @@ export function isThreadUnread(
 
   return preview.timestamp > read.openedAt;
 }
+
+/** A thread's read marker, when it was left by this conversation; null otherwise. */
+export function activeRead(
+  reads: ReadonlyMap<string, ThreadRead>,
+  key: string,
+  sessionSig: string
+): ThreadRead | null {
+  const read = reads.get(key);
+  return read !== undefined && read.sessionSig === sessionSig ? read : null;
+}

@@ -29,7 +29,7 @@ import type { ChatSummary } from './useWorkspaces';
  * so. Its attention border and unread dot are its agents' together, as before.
  */
 export const SpaceCard = memo(function SpaceCard({
-  summary, testKey, unread, pinned = false, muted = false, onOpenLayout, onHoverLayout, onLeaveLayout, onLongPress, actions = [],
+  summary, testKey, unread, pinned = false, muted = false, onOpenLayout, onHoverLayout, onLeaveLayout, onLongPress, actions = [], woke = false,
 }: {
   summary: ChatSummary & { host?: HostRef | null; connectionId?: string };
   testKey?: string;
@@ -44,6 +44,11 @@ export const SpaceCard = memo(function SpaceCard({
   onLongPress?: () => void;
   /** Offered to VoiceOver and Voice Control: the swipe's actions (`ChatRow`). */
   actions?: readonly RowAction[];
+  /**
+   * It woke from a snooze and has not been opened since (the inbox): "Woke"
+   * under its status mark, where a chat's row has it in place of its time.
+   */
+  woke?: boolean;
 }) {
   const { colors } = useTheme();
   const button = useRef<View>(null);
@@ -79,7 +84,7 @@ export const SpaceCard = memo(function SpaceCard({
         onAccessibilityAction={(event) => {
           actions.find((action) => action.name === event.nativeEvent.actionName)?.run();
         }}
-        accessibilityLabel={[title, pinned ? 'Pinned' : '', muted ? 'Muted' : '', stats, statusLabel(summary.status), unread ? 'Unread' : '', restoreFailed ?? ''].filter(Boolean).join(', ')}
+        accessibilityLabel={[title, pinned ? 'Pinned' : '', muted ? 'Muted' : '', woke ? 'Woke' : '', stats, statusLabel(summary.status), unread ? 'Unread' : '', restoreFailed ?? ''].filter(Boolean).join(', ')}
         testID={`chat-row-${key}`}
         style={({ pressed }) => ({
           flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
@@ -105,7 +110,10 @@ export const SpaceCard = memo(function SpaceCard({
             <Text variant="footnote" color="destructive" numberOfLines={2} testID="chat-row-restore-error">{restoreFailed}</Text>
           )}
         </View>
-        <StatusMark status={summary.status} unread={unread} />
+        <View style={{ alignItems: 'center', gap: spacing.sm }}>
+          <StatusMark status={summary.status} unread={unread} />
+          {woke && <Text variant="caption2" color="tint" testID={`chat-row-woke-${key}`}>Woke</Text>}
+        </View>
       </Pressable>
       {hasLayout && (
         <HoverView onHoverChange={hover} style={{ justifyContent: 'center', marginRight: spacing.xs }}>

@@ -24,6 +24,8 @@ type SFSymbolName = Extract<ComponentProps<typeof SymbolView>['name'], string>;
  * same ring as an empty one.
  */
 const MATERIAL = {
+  // Wake a snoozed chat.
+  'alarm': ['alarm', 0xe855],
   'arrow.clockwise': ['refresh', 0xe5d5],
   'arrow.down.circle.fill': ['arrow_circle_down', 0xf181],
   'arrow.up': ['arrow_upward', 0xe5d8],
@@ -31,6 +33,8 @@ const MATERIAL = {
   'arrow.up.circle.fill': ['arrow_circle_up', 0xf182],
   'arrow.up.left.and.arrow.down.right': ['open_in_full', 0xf1ce],
   'arrow.up.right': ['north_east', 0xf1e1],
+  // Unsettle a chat: back to the inbox.
+  'arrow.uturn.backward': ['undo', 0xe166],
   'asterisk': ['asterisk', 0xf525],
   'bell': ['notifications', 0xe7f4],
   'bell.slash': ['notifications_off', 0xe7f6],
@@ -48,6 +52,8 @@ const MATERIAL = {
   'chevron.right.2': ['keyboard_double_arrow_right', 0xeac9],
   'chevron.up': ['expand_less', 0xe5ce],
   'circle': ['radio_button_unchecked', 0xe836],
+  // Snooze a chat.
+  'clock': ['schedule', 0xe8b5],
   'circle.fill': ['radio_button_checked', 0xe837],
   'cloud': ['cloud', 0xe2bd],
   'cpu': ['memory', 0xe322],

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { DEFAULT_SETTLE_AFTER_DAYS, type SettleAfterDays } from '@/lib/inbox/autoSettle';
 import { DEFAULT_LIST_MODE, type ListMode } from '@/lib/listModes';
 import type { ThemePreference } from '@/theme/ThemeProvider';
 
@@ -71,6 +72,22 @@ export interface Settings {
    * opens on the view last used.
    */
   listMode: ListMode;
+  /**
+   * Sort the chats list as an inbox (`src/lib/inbox`): settle what is done,
+   * snooze what can wait, and let working chats wait under the list. Off by
+   * default, and off is the list as it always was: Pinned, Needs you, Working
+   * and Idle, with Rename and Close on the trailing swipe. Turning it off
+   * keeps what was settled or snoozed; turning it back on shows it again.
+   */
+  inbox: boolean;
+  /**
+   * Chats wait on a Working shelf under the list while their agent works, and
+   * come back to the top of the inbox when it finishes (`src/lib/inbox`). On
+   * by default: a chat that is working needs nothing from you yet.
+   */
+  hideWorking: boolean;
+  /** Settle a chat nothing has happened to for this many days; 0 never does. */
+  settleAfterDays: SettleAfterDays;
 }
 
 /**
@@ -108,6 +125,9 @@ export const SETTINGS_DEFAULTS: Settings = {
   activeDays: '',
   useHostThemes: true,
   listMode: DEFAULT_LIST_MODE,
+  inbox: false,
+  hideWorking: true,
+  settleAfterDays: DEFAULT_SETTLE_AFTER_DAYS,
 };
 
 interface SettingsState extends Settings {
@@ -141,6 +161,9 @@ export function settingsSnapshot(): Settings {
     activeDays: state.activeDays,
     useHostThemes: state.useHostThemes,
     listMode: state.listMode,
+    inbox: state.inbox,
+    hideWorking: state.hideWorking,
+    settleAfterDays: state.settleAfterDays,
   };
 }
 

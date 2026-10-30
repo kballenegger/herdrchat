@@ -87,6 +87,7 @@
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1",
       "^uuid$": "<rootDir>/node_modules/uuid/dist/cjs/index.js"
-    }
+    },
+    "globalSetup": "<rootDir>/jest.global-setup.js"
   }
 }

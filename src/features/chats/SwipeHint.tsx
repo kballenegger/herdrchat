@@ -12,6 +12,7 @@ import Animated, {
 
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
+import { useSettings } from '@/state/settings';
 import { useTheme } from '@/theme/ThemeProvider';
 import { motion, screenPadding, spacing } from '@/theme/tokens';
 
@@ -28,6 +29,8 @@ import { motion, screenPadding, spacing } from '@/theme/tokens';
  */
 export function SwipeHint() {
   const { colors } = useTheme();
+  // What the trailing swipe does depends on whether the list is an inbox.
+  const inbox = useSettings((state) => state.inbox);
   const drift = useSharedValue(0);
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export function SwipeHint() {
         paddingVertical: spacing.sm,
       }}>
       <Text variant="caption" color="secondary">
-        Swipe a chat either way to pin, mute, rename or close it
+        {inbox ? 'Swipe a chat right to pin or mute it, left to settle or snooze it' : 'Swipe a chat either way to pin, mute, rename or close it'}
       </Text>
       <Animated.View style={style}>
         <Icon

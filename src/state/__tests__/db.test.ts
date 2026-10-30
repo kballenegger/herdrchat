@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { clearCachedMessages, clearConnectionSettings, clearPrompts, deleteConnection, inTransaction, loadChatPrefs, saveChatPref } from '../db';
+import { NO_INBOX_PREF } from '@/lib/inbox/inbox';
+import { clearCachedMessages, clearConnectionSettings, clearPrompts, deleteConnection, inTransaction, loadChatPrefs, migrate, restoreChatPref, saveChatPref } from '../db';
 
 it('clears all transcript content, but leaves credentials and host rows alone', async () => {
   const runAsync = jest.fn(async () => undefined);
@@ -61,14 +62,14 @@ describe('pinned and muted chats', () => {
   it('keeps the other choice when the same chat is muted after being pinned', async () => {
     const { db, runAsync } = fake([{ workspace_id: 'w1', session_sig: 's1', pinned_at: 5, muted: 0 }]);
     await saveChatPref(db, 'host', 'w1', 's1', { muted: true });
-    expect(runAsync.mock.calls[0]?.slice(1)).toEqual(['host', 'w1', 's1', 5, 1]);
+    expect(runAsync.mock.calls[0]?.slice(1)).toEqual(['host', 'w1', 's1', 5, 1, null, null, null, null, null, 1]);
   });
 
   // herdr reused the slot: the old chat's pin is not the new chat's.
   it('drops what an earlier chat in the slot chose', async () => {
     const { db, runAsync } = fake([{ workspace_id: 'w1', session_sig: 'old', pinned_at: 5, muted: 1 }]);
     await saveChatPref(db, 'host', 'w1', 'new', { muted: true });
-    expect(runAsync.mock.calls[0]?.slice(1)).toEqual(['host', 'w1', 'new', null, 1]);
+    expect(runAsync.mock.calls[0]?.slice(1)).toEqual(['host', 'w1', 'new', null, 1, null, null, null, null, null, 1]);
   });
 
   it('deletes the row once neither choice is left', async () => {
@@ -76,7 +77,7 @@ describe('pinned and muted chats', () => {
     await saveChatPref(db, 'host', 'w1', 's1', { pinnedAt: null });
     expect(runAsync).toHaveBeenCalledWith('DELETE FROM chat_prefs WHERE connection_id = ? AND workspace_id = ?', 'host', 'w1');
     const loaded = await loadChatPrefs(db, 'host');
-    expect(loaded.get('w1')).toEqual({ sessionSig: 's1', pinnedAt: 5, muted: false });
+    expect(loaded.get('w1')).toEqual({ ...NO_INBOX_PREF, sessionSig: 's1', pinnedAt: 5, muted: false });
   });
 });
 
@@ -152,4 +153,49 @@ itWithSqlite('clears a host\'s settings and its machines\', and nothing of its n
   const left = raw.prepare('SELECT key FROM settings ORDER BY key').all() as { key: string }[];
   // `h1/m1` alone is no host's setting: settings are `<name>.<id>`.
   expect(left.map((row) => row.key)).toEqual(['h1/m1', 'hostMachines.h10', 'lastCwd.h10/m1', 'lastCwd.xh1/m1', 'theme']);
+});
+
+// MARK: - The inbox's columns
+
+function migratingDb() {
+  const raw = new sqlite!.DatabaseSync(':memory:');
+  const db = {
+    execAsync: async (sql: string) => raw.exec(sql),
+    runAsync: async (sql: string, ...params: unknown[]) => raw.prepare(sql).run(...params),
+    getAllAsync: async (sql: string, ...params: unknown[]) => raw.prepare(sql).all(...params),
+    withTransactionAsync: async (task: () => Promise<void>) => task(),
+  } as unknown as SQLiteDatabase;
+  return { raw, db };
+}
+
+// A database from before the inbox keeps its pins and gains the columns, each
+// row reading as nothing settled or snoozed and settling by itself allowed.
+itWithSqlite('adds the inbox\'s columns to an older chat_prefs, keeping its rows', async () => {
+  const { raw, db } = migratingDb();
+  raw.exec(`CREATE TABLE chat_prefs (
+    connection_id TEXT NOT NULL, workspace_id TEXT NOT NULL, session_sig TEXT NOT NULL,
+    pinned_at INTEGER, muted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (connection_id, workspace_id))`);
+  raw.prepare('INSERT INTO chat_prefs (connection_id, workspace_id, session_sig, pinned_at, muted) VALUES (?, ?, ?, ?, ?)').run('h', 'w1', 's1', 5, 1);
+  await migrate(db);
+  // Twice: every launch runs it.
+  await migrate(db);
+  const columns = (raw.prepare('PRAGMA table_info(chat_prefs)').all() as { name: string }[]).map((column) => column.name);
+  expect(columns).toEqual(expect.arrayContaining(['settled_at', 'settled_reason', 'unsettled_at', 'snoozed_until', 'snoozed_at', 'auto_settle']));
+  expect((await loadChatPrefs(db, 'h')).get('w1')).toEqual({ ...NO_INBOX_PREF, sessionSig: 's1', pinnedAt: 5, muted: true });
+});
+
+itWithSqlite('saves a settle and a snooze, and puts a pref back exactly for Undo', async () => {
+  const { db } = migratingDb();
+  await migrate(db);
+  await saveChatPref(db, 'h', 'w1', 's1', { pinnedAt: 5 });
+  const before = (await loadChatPrefs(db, 'h')).get('w1') ?? null;
+  await saveChatPref(db, 'h', 'w1', 's1', { pinnedAt: null, settledAt: 9, settledReason: 'user' });
+  expect((await loadChatPrefs(db, 'h')).get('w1')).toMatchObject({ pinnedAt: null, settledAt: 9, settledReason: 'user' });
+  await restoreChatPref(db, 'h', 'w1', before);
+  expect((await loadChatPrefs(db, 'h')).get('w1')).toEqual(before);
+  await saveChatPref(db, 'h', 'w2', 's2', { snoozedUntil: 20, snoozedAt: 10, autoSettle: false });
+  expect((await loadChatPrefs(db, 'h')).get('w2')).toEqual({ ...NO_INBOX_PREF, sessionSig: 's2', muted: false, snoozedUntil: 20, snoozedAt: 10, autoSettle: false });
+  // A pref that chooses nothing is no row at all.
+  await restoreChatPref(db, 'h', 'w2', null);
+  expect((await loadChatPrefs(db, 'h')).has('w2')).toBe(false);
 });

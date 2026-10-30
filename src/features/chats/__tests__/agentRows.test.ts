@@ -1,7 +1,8 @@
+import { DEFAULT_SHELVES, NO_INBOX_PREF } from '@/lib/inbox/inbox';
 import type { AgentInfo } from '@/lib/herdr/models';
 import type { ThreadRead } from '@/lib/unread';
 import { agentPrefRow, agentRowKey, agentRows, agentTestKey, isAgentUnread, type AgentRow } from '../agentRows';
-import { groupChats } from '../chatGroups';
+import { PLAIN_INBOX, chatFacts, groupChats, type InboxContext } from '../chatGroups';
 import { listChats, rowKey } from '../listedChat';
 import { agentContext, rowTitle } from '../rowText';
 import type { ChatSummary, PaneSummary } from '../useWorkspaces';
@@ -108,7 +109,11 @@ describe('agentRows', () => {
     expect(agentPrefRow(host[1]!, host[1]!.panes[1]!)).toEqual({
       connectionId: 'gimel', workspaceId: 'w6', sessionSig: 'sig-w6:p2', chatKey: 'w6/w6:p2',
       inherits: [{ key: 'w6', sessionSig: 'sig-w6:p2' }, { key: 'w6', sessionSig: 'sig-w6:p1,sig-w6:p2' }],
+      // Settled and snoozed with its workspace: on the card's pref.
+      inboxRef: { key: 'w6', sessionSig: 'sig-w6:p1,sig-w6:p2' },
     });
+    expect(p2.inboxRef).toEqual({ key: 'w6', sessionSig: 'sig-w6:p1,sig-w6:p2' });
+    expect(byKey('w2').inboxRef).toBeUndefined();
     expect(p2.inherits).toEqual(agentPrefRow(host[1]!, host[1]!.panes[1]!).inherits);
     expect(byKey('w2').inherits).toEqual([]);
   });
@@ -120,27 +125,47 @@ describe('agentRows', () => {
 
 describe('agentRows through groupChats', () => {
   const ids = (items: ReturnType<typeof groupChats<AgentRow>>) =>
-    items.map((item) => (item.kind === 'group' ? item.id : item.kind === 'chat' ? item.summary.chatKey : item.kind === 'tab' ? `tab:${item.tabId}` : `pane:${item.pane.paneId}`));
+    items.map((item) => (item.kind === 'group' || item.kind === 'shelf' ? item.id : item.kind === 'chat' ? item.summary.chatKey
+      : item.kind === 'tab' ? `tab:${item.tabId}` : item.kind === 'pane' ? `pane:${item.pane.paneId}` : item.kind));
+  const facts = (pinned: ReadonlyMap<string, number>): InboxContext<AgentRow>['facts'] =>
+    (summary, key) => chatFacts(summary, { pref: { ...NO_INBOX_PREF, pinnedAt: pinned.get(key) ?? null } });
+  /** The list as an inbox (the setting on), Working shelf on. */
+  const inbox = (pinned: ReadonlyMap<string, number> = new Map()): InboxContext<AgentRow> => ({
+    enabled: true, now: 0, hideWorking: true, shelves: DEFAULT_SHELVES, facts: facts(pinned),
+  });
+  /** The list grouped as it always was (the setting off, the default). */
+  const grouped = (pinned: ReadonlyMap<string, number> = new Map()): InboxContext<AgentRow> => ({
+    ...(PLAIN_INBOX as unknown as InboxContext<AgentRow>), facts: facts(pinned),
+  });
 
   it('groups each agent by its own state, with no pane rows under any of them', () => {
     // Idle lists the agent that finished last first: w6:p1's reply is newer than w2's.
-    expect(ids(groupChats(rows, '', new Map(), agentRowKey))).toEqual([
+    expect(ids(groupChats(rows, '', grouped(), agentRowKey))).toEqual([
       'needs-you', 'w1', 'working', 'w6/w6:p2', 'idle', 'w6/w6:p1', 'w2',
     ]);
+    expect(ids(groupChats(rows, '', grouped(new Map([['gimel\nw6/w6:p1', 1]])), agentRowKey))).toEqual([
+      'pinned', 'w6/w6:p1', 'needs-you', 'w1', 'working', 'w6/w6:p2', 'idle', 'w2',
+    ]);
+    expect(ids(groupChats(rows, 'api', grouped(), agentRowKey))).toEqual(['working', 'w6/w6:p2', 'idle', 'w6/w6:p1']);
+  });
+
+  it('lays out each agent by its own state as an inbox, with no pane rows under any of them', () => {
+    // The agent whose reply is newest first, then the host's order (w1 is
+    // nuku's, after gimel's); the working one waits on its shelf.
+    expect(ids(groupChats(rows, '', inbox(), agentRowKey))).toEqual(['w6/w6:p1', 'w2', 'w1', 'working']);
   });
 
   it('puts a pinned agent in Pinned, by its own key, leaving its sibling where it was', () => {
     const pinned = new Map([['gimel\nw6/w6:p1', 1]]);
-    expect(ids(groupChats(rows, '', pinned, agentRowKey))).toEqual([
-      'pinned', 'w6/w6:p1', 'needs-you', 'w1', 'working', 'w6/w6:p2', 'idle', 'w2',
-    ]);
+    expect(ids(groupChats(rows, '', inbox(pinned), agentRowKey))).toEqual(['pinned', 'w6/w6:p1', 'w2', 'w1', 'working']);
   });
 
   it('finds an agent by its own folder or provider, and every agent by its workspace or host', () => {
-    expect(ids(groupChats(rows, 'api/web', new Map(), agentRowKey))).toEqual(['working', 'w6/w6:p2']);
-    expect(ids(groupChats(rows, 'codex', new Map(), agentRowKey))).toEqual(['working', 'w6/w6:p2']);
-    expect(ids(groupChats(rows, 'api', new Map(), agentRowKey))).toEqual(['working', 'w6/w6:p2', 'idle', 'w6/w6:p1']);
-    expect(ids(groupChats(rows, 'nuku', new Map(), agentRowKey))).toEqual(['needs-you', 'w1']);
+    // A search opens the shelves, so a working agent it finds is listed.
+    expect(ids(groupChats(rows, 'api/web', inbox(), agentRowKey))).toEqual(['working', 'w6/w6:p2']);
+    expect(ids(groupChats(rows, 'codex', inbox(), agentRowKey))).toEqual(['working', 'w6/w6:p2']);
+    expect(ids(groupChats(rows, 'api', inbox(), agentRowKey))).toEqual(['w6/w6:p1', 'working', 'w6/w6:p2']);
+    expect(ids(groupChats(rows, 'nuku', inbox(), agentRowKey))).toEqual(['w1']);
   });
 });
 

@@ -1,4 +1,4 @@
-import { chatWantsYou, isChatUnread, isPaneUnread } from '../chatUnread';
+import { chatWantsYou, isChatUnread, isPaneUnread, rowOpenedAt } from '../chatUnread';
 import type { AgentInfo } from '@/lib/herdr/models';
 import type { ThreadRead } from '@/lib/unread';
 import type { ChatSummary, PaneSummary } from '../useWorkspaces';
@@ -117,5 +117,36 @@ describe('chatWantsYou', () => {
     const solo: ChatSummary = { ...workspace([blocked(p1)]), status: 'blocked' };
     expect(chatWantsYou(solo, new Map())).toBe(true);
     expect(chatWantsYou(solo, new Map(), 'w6')).toBe(false);
+  });
+});
+
+// The inbox's "Woke" mark goes once the chat has been seen since it woke.
+describe('rowOpenedAt', () => {
+  const reads = (entries: [string, string, number][]) => new Map(entries.map(([key, sessionSig, openedAt]) => [key, { sessionSig, openedAt }]));
+
+  it('is a chat\'s own read marker, for its own session only', () => {
+    const row = { workspaceId: 'w1', sessionSig: 'sig-w1' };
+    expect(rowOpenedAt(row, reads([['w1', 'sig-w1', 50]]), null, 1_000)).toBe(50);
+    expect(rowOpenedAt(row, reads([['w1', 'sig-old', 50]]), null, 1_000)).toBeNull();
+    expect(rowOpenedAt(row, new Map(), null, 1_000)).toBeNull();
+  });
+
+  // Reading the workspace's merged thread clears an agent's unread dot
+  // (`isPaneUnread`): it clears its "Woke" too.
+  it('counts the merged workspace thread for an agent it held', () => {
+    const agent = { workspaceId: 'w6', sessionSig: 'sig-w6:p2', chatKey: 'w6/w6:p2' };
+    expect(rowOpenedAt(agent, reads([['w6', 'sig-w6:p1,sig-w6:p2', 80], ['w6/w6:p2', 'sig-w6:p2', 20]]), null, 1_000)).toBe(80);
+    // A merged thread from before this agent's session says nothing about it.
+    expect(rowOpenedAt(agent, reads([['w6', 'sig-w6:p1,sig-old', 80]]), null, 1_000)).toBeNull();
+  });
+
+  // On iPad the chat beside the list is being read; its marker is only
+  // stamped when it closes.
+  it('is now for the chat open beside the list, or its workspace\'s merged thread', () => {
+    const agent = { workspaceId: 'w6', sessionSig: 'sig-w6:p2', chatKey: 'w6/w6:p2' };
+    expect(rowOpenedAt(agent, new Map(), 'w6/w6:p2', 1_000)).toBe(1_000);
+    expect(rowOpenedAt(agent, new Map(), 'w6', 1_000)).toBe(1_000);
+    expect(rowOpenedAt(agent, new Map(), 'w6/w6:p1', 1_000)).toBeNull();
+    expect(rowOpenedAt({ workspaceId: 'w1', sessionSig: 'sig-w1' }, new Map(), 'w1', 1_000)).toBe(1_000);
   });
 });
