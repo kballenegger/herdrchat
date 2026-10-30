@@ -23,7 +23,8 @@ const chat = (workspaceId: string, panes: PaneSummary[], shellPanes: TerminalPan
 });
 
 const shape = (rows: ReturnType<typeof withTerminalRows>) => rows.map((row) =>
-  row.kind === 'group' ? row.id
+  row.kind === 'group' || row.kind === 'shelf' ? row.id
+    : row.kind === 'more' || row.kind === 'clear' ? row.kind
     : row.kind === 'chat' ? row.summary.workspaceId
       : row.kind === 'pane' ? `pane ${row.pane.paneId}${row.first ? ' first' : ''}${row.last ? ' last' : ''}`
         : row.kind === 'tab' ? `tab ${row.tabId}${row.label === null ? '' : ` "${row.label}"`}${row.first ? ' first' : ''}`
@@ -39,7 +40,6 @@ it("lists a workspace's terminals after its agents, on one rail", () => {
     chat('w8', [paneSummary('w8:p1')], []),
   ], ''), true);
   expect(shape(rows)).toEqual([
-    'idle',
     'w6', 'pane w6:p1 first', 'pane w6:p2', 'terminal w6:p3', 'terminal w6:p4 last',
     // One agent beside a shell is a space card too: the agent is a row under
     // it, then the terminal, so the terminal does not read as the agent's.
@@ -79,7 +79,7 @@ describe('grouped by tab', () => {
   // `first` (its rail would overlap the label's, a darker step in dark mode).
   it("lists a workspace's rows tab by tab, the first labelled tab with no line", () => {
     expect(shape(withTerminalRows(groupChats([{ ...w6(named), tabs: named }], ''), true))).toEqual([
-      'idle', 'w6',
+      'w6',
       'tab w6:t1 "agents" first', 'pane w6:p1', 'pane w6:p5',
       'tab w6:t2', 'terminal w6:p4',
       'tab w6:t3 "web"', 'pane w6:p2', 'terminal w6:p3 last',
@@ -90,7 +90,7 @@ describe('grouped by tab', () => {
   it('starts an unnamed first tab with no item', () => {
     const tabs = [tab('w6:t1', 1, '1'), tab('w6:t2', 2, 'server'), tab('w6:t3', 3, '')];
     expect(shape(withTerminalRows(groupChats([{ ...w6(tabs), tabs }], ''), true))).toEqual([
-      'idle', 'w6', 'pane w6:p1 first', 'pane w6:p5',
+      'w6', 'pane w6:p1 first', 'pane w6:p5',
       'tab w6:t2 "server"', 'terminal w6:p4',
       'tab w6:t3', 'pane w6:p2', 'terminal w6:p3 last',
     ]);
@@ -101,7 +101,7 @@ describe('grouped by tab', () => {
   // A herdr that sends no `tabs`: ordered by the number in the tab id, unlabelled.
   it('orders by the tab id without the snapshot\'s tabs', () => {
     expect(shape(withTerminalRows(groupChats([w6([])], ''), true))).toEqual([
-      'idle', 'w6', 'pane w6:p1 first', 'pane w6:p5',
+      'w6', 'pane w6:p1 first', 'pane w6:p5',
       'tab w6:t2', 'terminal w6:p4',
       'tab w6:t3', 'pane w6:p2', 'terminal w6:p3 last',
     ]);
@@ -111,7 +111,7 @@ describe('grouped by tab', () => {
     const one = chat('w6', [inTab(paneSummary('w6:p1'), 'w6:t2'), inTab(paneSummary('w6:p2'), 'w6:t2')], [inTab(shell('w6:p3'), 'w6:t2')]);
     const tabs = [tab('w6:t1', 1, 'empty'), tab('w6:t2', 2, 'all')];
     expect(shape(withTerminalRows(groupChats([{ ...one, tabs }], ''), true))).toEqual([
-      'idle', 'w6', 'pane w6:p1 first', 'pane w6:p2', 'terminal w6:p3 last',
+      'w6', 'pane w6:p1 first', 'pane w6:p2', 'terminal w6:p3 last',
     ]);
   });
 
@@ -120,7 +120,7 @@ describe('grouped by tab', () => {
     const searched = chat('w6', [inTab({ ...paneSummary('w6:p1'), agent: { ...agent('w6:p1'), agent: 'codex' } }, 'w6:t1'), inTab(paneSummary('w6:p2'), 'w6:t2')], [inTab(shell('w6:p3'), 'w6:t1')]);
     const tabs = [tab('w6:t1', 1, 'api'), tab('w6:t2', 2, 'web')];
     expect(shape(withTerminalRows(groupChats([{ ...searched, tabs }], 'codex'), true))).toEqual([
-      'idle', 'w6', 'pane w6:p1 first', 'terminal w6:p3 last',
+      'w6', 'pane w6:p1 first', 'terminal w6:p3 last',
     ]);
   });
 });

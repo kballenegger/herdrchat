@@ -6,7 +6,9 @@ import type { BatchAnswer } from '@/lib/herdr/socket';
 import { buildSummaries, refreshProcessNames, type CachedProcessName } from '../useWorkspaces';
 import { terminalContext } from '../rowText';
 import { chatListRows } from '../chatListRows';
-import { listChats } from '../listedChat';
+import { listChats, type ListedChat } from '../listedChat';
+import { PLAIN_INBOX, chatFacts, type InboxContext } from '../chatGroups';
+import { NO_INBOX_PREF } from '@/lib/inbox/inbox';
 
 jest.mock('../../usePollGate', () => ({ usePollGate: () => true }));
 jest.mock('../../useHostEvents', () => ({ useHostEvents: () => false }));
@@ -165,6 +167,8 @@ describe('terminalContext', () => {
   });
 });
 
+const plain = PLAIN_INBOX as unknown as InboxContext<ListedChat>;
+
 describe('chatListRows', () => {
   // The Demo: w6 has two agents and the shell panes w6:p3 and w6:p4; w7 one
   // agent and the shell w7:p2, so its agent is a row under its card too.
@@ -174,8 +178,8 @@ describe('chatListRows', () => {
   };
 
   it("hangs a workspace's shell pane under its card in Spaces", async () => {
-    const rows = chatListRows('spaces', await listed(), '', new Map(), true);
-    const w6 = rows.flatMap((row) => (row.kind === 'chat' || row.kind === 'group' ? [] : [`${row.kind}:${row.kind === 'pane' ? row.pane.paneId : row.kind === 'tab' ? `${row.tabId}:${row.label ?? ''}` : row.terminal.paneId}`]));
+    const rows = chatListRows('spaces', await listed(), '', plain, true);
+    const w6 = rows.flatMap((row) => (row.kind !== 'pane' && row.kind !== 'tab' && row.kind !== 'terminal' ? [] : [`${row.kind}:${row.kind === 'pane' ? row.pane.paneId : row.kind === 'tab' ? `${row.tabId}:${row.label ?? ''}` : row.terminal.paneId}`]));
     // Without the snapshot's `tabs` (not passed here), w6's dev server is
     // still set apart by its tab id's number, under a line with no label.
     expect(w6).toEqual(['pane:w6:p1', 'pane:w6:p2', 'terminal:w6:p3', 'tab:w6:t2:', 'terminal:w6:p4', 'pane:w7:p1', 'terminal:w7:p2', 'terminal:w9:p1']);
@@ -185,25 +189,35 @@ describe('chatListRows', () => {
   // so. Without the shells, w6's agents share one tab and nothing divides
   // them. The opencode pane keeps its row, or it would be in no list at all.
   it('lists only agents as terminal rows where no terminal can open', async () => {
-    const rows = chatListRows('spaces', await listed(), '', new Map(), false);
+    const rows = chatListRows('spaces', await listed(), '', plain, false);
     expect(rows.flatMap((row) => (row.kind === 'terminal' ? [row.terminal.paneId] : []))).toEqual(['w9:p1']);
     expect(rows.some((row) => row.kind === 'tab')).toBe(false);
     expect(rows.some((row) => row.kind === 'pane' && row.pane.paneId === 'w6:p2')).toBe(true);
   });
 
   // An agent row carries no shells. An agent the app has no reader for is a
-  // terminal row of its own there, under no card, in its status's group.
+  // terminal row of its own there, under no card, at the end of the inbox:
+  // it has no conversation to settle or snooze, and a shelf could not open it.
   it('lists no shells in Agents, and an agent the app cannot read as a terminal row of its own', async () => {
-    const rows = chatListRows('agents', await listed(), '', new Map(), true);
+    const hiding = { ...plain, hideWorking: true };
+    const rows = chatListRows('agents', await listed(), '', hiding, true);
     const terminals = rows.filter((row) => row.kind === 'terminal');
     expect(terminals.map((row) => [row.terminal.paneId, row.standalone])).toEqual([['w9:p1', true]]);
-    const idle = rows.findIndex((row) => row.kind === 'group' && row.id === 'idle');
-    const idleRows = rows.slice(idle + 1);
-    expect(idleRows.at(-1)).toMatchObject({ kind: 'terminal' });
-    expect(rows[idle]).toMatchObject({ kind: 'group', count: rows.filter((row, index) => index > idle && row.kind !== 'group').length });
+    const shelf = rows.findIndex((row) => row.kind === 'shelf');
+    expect(rows[shelf]).toMatchObject({ kind: 'shelf', id: 'working' });
+    expect(rows[shelf - 1]).toMatchObject({ kind: 'terminal' });
     expect(rows.some((row) => row.kind === 'chat' && row.summary.workspaceId === 'w6')).toBe(true);
     // A search finds it by its agent's name, and leaves it out otherwise.
-    expect(chatListRows('agents', await listed(), 'opencode', new Map(), true).filter((row) => row.kind === 'terminal')).toHaveLength(1);
-    expect(chatListRows('agents', await listed(), 'grok', new Map(), true).filter((row) => row.kind === 'terminal')).toHaveLength(0);
+    expect(chatListRows('agents', await listed(), 'opencode', plain, true).filter((row) => row.kind === 'terminal')).toHaveLength(1);
+    expect(chatListRows('agents', await listed(), 'grok', plain, true).filter((row) => row.kind === 'terminal')).toHaveLength(0);
+  });
+
+  // With every chat on a shelf, the terminal row is still in the inbox, so
+  // the inbox is not "All clear".
+  it('keeps an unreadable agent\'s row in place of "All clear"', async () => {
+    const settled = { ...plain, facts: (summary: ListedChat) => chatFacts(summary, { pref: { ...NO_INBOX_PREF, settledAt: 1 } }) };
+    const rows = chatListRows('agents', await listed(), '', settled, true);
+    expect(rows[0]).toMatchObject({ kind: 'terminal' });
+    expect(rows.some((row) => row.kind === 'clear')).toBe(false);
   });
 });

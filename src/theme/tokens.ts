@@ -458,6 +458,25 @@ export const agentsBar = {
 } as const;
 
 /**
+ * The chats list as an inbox (`src/lib/inbox`).
+ *
+ * `undoNotice`: how long "Settled · Undo" stays. `clockTick`: how often the
+ * list looks at the time while it is on screen, so a snooze that has ended
+ * comes back and the wake labels count down. `slimRow`: the height of a
+ * settled or snoozed row, one line where a card has three. `fullSwipe`: how
+ * far past the row's width a trailing swipe must go to commit its first
+ * action without a tap, as a fraction of the row. `undoLift`: the notice
+ * floats this far above the bottom inset, clear of the floating tab bar.
+ */
+export const inbox = {
+  undoNotice: 5000,
+  clockTick: 30_000,
+  slimRow: 44,
+  fullSwipe: 0.4,
+  undoLift: 64,
+} as const;
+
+/**
  * The chat list's skeleton while a host is reached: each row breathes between
  * full and `skeletonDim` over `skeletonCycle` ms, the next one `skeletonStagger`
  * ms later, so the list reads as waiting rather than frozen.

@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radius, size, spacing, typography, useScaledLine } from '@/theme/tokens';
+import { inbox, radius, size, spacing, typography, useScaledLine } from '@/theme/tokens';
 import { StatusMark } from './StatusMark';
 import { useDeviceIcon } from '@/state/deviceIcons';
 import { rowTestKey, type HostRef } from './listedChat';
@@ -23,6 +23,7 @@ export interface RowAction {
 
 export const ChatRow = memo(function ChatRow({
   summary, testKey, unread, selected = false, pinned = false, muted = false, onPress, onLongPress, actions = [],
+  variant = 'card', title: titleOverride, trailing, woke = false,
 }: {
   /** With `host`, a chat on another host: its name leads the line under the title. */
   summary: ChatSummary & { host?: HostRef | null; connectionId?: string };
@@ -45,6 +46,17 @@ export const ChatRow = memo(function ChatRow({
    * actions exist only for people who can see and drag (#112).
    */
   actions?: readonly RowAction[];
+  /**
+   * `slim`: one line, for a settled or snoozed chat, which has nothing to
+   * say until it comes back: its title, and `trailing` on the right.
+   */
+  variant?: 'card' | 'slim';
+  /** What the row is titled by, when not its chat's (`rowTitle`): a space card's label. */
+  title?: string;
+  /** A slim row's right edge: when a snoozed chat wakes (`3h`), or when one was settled. */
+  trailing?: string;
+  /** It woke from a snooze and has not been opened since: "Woke" where its time goes. */
+  woke?: boolean;
 }) {
   const { colors } = useTheme();
   const previewHeight = useScaledLine(typography.footnote.lineHeight);
@@ -52,7 +64,7 @@ export const ChatRow = memo(function ChatRow({
   const working = summary.status === 'working';
   const agent = summary.agents.find((item) => item.focused && item.agent !== null)
     ?? summary.agents.find((item) => item.agent !== null);
-  const title = rowTitle(summary);
+  const title = titleOverride ?? rowTitle(summary);
   const context = rowContext(summary);
   const status = statusLabel(summary.status);
   const preview = summary.preview === null ? status
@@ -60,6 +72,39 @@ export const ChatRow = memo(function ChatRow({
   // herdr's own sentence, which already says what to do about it.
   const deviceIcon = useDeviceIcon(summary.connectionId);
   const restoreFailed = summary.restoreError !== null ? `Couldn't restore. ${summary.restoreError}` : null;
+
+  const key = testKey ?? rowTestKey(summary);
+  if (variant === 'slim') return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityActions={actions.map(({ name, label }) => ({ name, label }))}
+      onAccessibilityAction={(event) => {
+        actions.find((action) => action.name === event.nativeEvent.actionName)?.run();
+      }}
+      accessibilityLabel={[title, pinned ? 'Pinned' : '', muted ? 'Muted' : '', unread ? 'Unread' : '', trailing ?? ''].filter(Boolean).join(', ')}
+      testID={`chat-row-${key}`}
+      style={({ pressed }) => ({
+        flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+        minHeight: inbox.slimRow, paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+        borderRadius: radius.sm, borderWidth: 1,
+        borderColor: selected ? colors.tint : 'transparent',
+        backgroundColor: pressed ? colors.chatCardPressed : colors.chatCard,
+      })}>
+      {selected && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius.sm, backgroundColor: colors.tintMuted }]} />
+      )}
+      <Text variant="body" numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>{title}</Text>
+      {pinned && <Icon name="pin.fill" size={size.rowBadgeGlyph} tintColor={colors.secondaryLabel} />}
+      {muted && <Icon name="bell.slash.fill" size={size.rowBadgeGlyph} tintColor={colors.secondaryLabel} />}
+      {unread && <StatusMark status={summary.status} unread />}
+      {trailing !== undefined && (
+        <Text variant="caption" color="secondary" mono testID={`chat-row-trailing-${key}`}>{trailing}</Text>
+      )}
+    </Pressable>
+  );
 
   return (
     <Pressable
@@ -71,11 +116,11 @@ export const ChatRow = memo(function ChatRow({
       onAccessibilityAction={(event) => {
         actions.find((action) => action.name === event.nativeEvent.actionName)?.run();
       }}
-      accessibilityLabel={[title, pinned ? 'Pinned' : '', muted ? 'Muted' : '', context, status, unread ? 'Unread' : '', restoreFailed ?? summary.preview?.text].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, pinned ? 'Pinned' : '', muted ? 'Muted' : '', woke ? 'Woke' : '', context, status, unread ? 'Unread' : '', restoreFailed ?? summary.preview?.text].filter(Boolean).join(', ')}
       // `chat-row-w2` on the selected host, `chat-row-<hostId>-w1` on another
       // (`rowTestKey`): workspace ids repeat across hosts, and a
       // connection id's slash has no place in a testID.
-      testID={`chat-row-${testKey ?? rowTestKey(summary)}`}
+      testID={`chat-row-${key}`}
       style={({ pressed }) => ({
         flexDirection: 'row', alignItems: 'center', gap: spacing.md,
         padding: spacing.md, borderRadius: radius.sm, borderWidth: 1,
@@ -116,7 +161,8 @@ export const ChatRow = memo(function ChatRow({
 
       <View style={{ alignItems: 'center', gap: spacing.sm }}>
         <StatusMark status={summary.status} unread={unread} />
-        {working ? <Text variant="caption2" color="tint">now</Text> : summary.preview?.timestamp != null && (
+        {woke ? <Text variant="caption2" color="tint" testID={`chat-row-woke-${key}`}>Woke</Text>
+          : working ? <Text variant="caption2" color="tint">now</Text> : summary.preview?.timestamp != null && (
           <Text variant="caption2" color="secondary">{formatListTime(summary.preview.timestamp)}</Text>
         )}
       </View>

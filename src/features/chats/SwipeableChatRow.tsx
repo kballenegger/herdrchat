@@ -1,7 +1,8 @@
 import { useRecyclingState } from '@shopify/flash-list';
 import { memo, useCallback, useRef, type ReactNode } from 'react';
-import { Pressable } from 'react-native';
-import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import { Pressable, View } from 'react-native';
+import Animated, { useAnimatedReaction, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -10,16 +11,21 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { haptics } from '@/components/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
-import { minTouchTarget, radius, spacing } from '@/theme/tokens';
+import { inbox, minTouchTarget, radius, spacing } from '@/theme/tokens';
+import { useSwipeActivity } from '@/state/swipeActivity';
 import type { LayoutAnchor } from '@/features/spaces/LayoutPeek';
-import { ChatRow } from './ChatRow';
+import { ChatRow, type RowAction } from './ChatRow';
 import { SpaceCard } from './SpaceCard';
 import { rowTestKey, type HostRef } from './listedChat';
+import { spaceTitle } from './rowText';
 import type { ChatSummary } from './useWorkspaces';
 
 /**
- * A chat row with swipe actions: Pin and Mute on the leading side, Rename and
- * Close on the trailing one, as Messages splits them.
+ * A chat row with swipe actions: Pin and Mute on the leading side, and the
+ * inbox on the trailing one (`TrailingSwipe`): Settle and Snooze for a chat in
+ * the inbox, Unsettle for a settled one, Wake for a snoozed one. A full
+ * trailing swipe, past `inbox.fullSwipe` of the row, commits the first action
+ * without a tap, as Mail's does.
  *
  * `ChatRow` stays presentational — it does not know it can be swiped, which is
  * what lets it keep being used wherever a row is drawn without one.
@@ -34,6 +40,21 @@ import type { ChatSummary } from './useWorkspaces';
  */
 const ACTION_WIDTH = 76;
 
+/** One trailing action: what it is called, its glyph, and what it does. */
+export interface SwipeChoice {
+  /** Names its test id (`swipe-action-settle`). */
+  id: 'settle' | 'snooze' | 'unsettle' | 'wake';
+  label: string;
+  symbol: IconName;
+  run: () => void;
+}
+
+/** The trailing side: its first action, in the tint, and maybe a second beside it. */
+export interface TrailingSwipe {
+  primary: SwipeChoice;
+  secondary?: SwipeChoice;
+}
+
 export const SwipeableChatRow = memo(function SwipeableChatRow({
   summary,
   testKey,
@@ -41,8 +62,11 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
   selected,
   onPress,
   onLongPress,
-  onRename,
-  onClose,
+  trailing,
+  actions = [],
+  variant = 'card',
+  trailingLabel,
+  woke = false,
   pinned = false,
   muted = false,
   onTogglePin,
@@ -57,8 +81,15 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
   selected?: boolean;
   onPress: () => void;
   onLongPress: () => void;
-  onRename: () => void;
-  onClose: () => void;
+  /** Absent while the chat has no session to settle or snooze by. */
+  trailing?: TrailingSwipe;
+  /** Everything the swipes and the long press can do, for VoiceOver and Voice Control. */
+  actions?: readonly RowAction[];
+  /** `slim` for a settled or snoozed chat (`ChatRow`). */
+  variant?: 'card' | 'slim';
+  /** A slim row's right edge (`ChatRow.trailing`). */
+  trailingLabel?: string;
+  woke?: boolean;
   pinned?: boolean;
   muted?: boolean;
   /** Absent while the chat has no session to pin or mute by. */
@@ -104,39 +135,48 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
   const key = testKey ?? rowTestKey(summary);
   useRecyclingState(false, [key], () => {
     swipeable.current?.reset();
+    useSwipeActivity.getState().ended(key);
   });
 
+  // How far the row has been dragged open this gesture, for the full swipe.
+  const peak = useSharedValue(0);
+  const width = useRef(0);
   const renderRightActions = useCallback(
-    (_progress: unknown, translation: SharedValue<number>, methods: SwipeableMethods) => (
-      <ActionPanel side="right" count={2} seam="neutral" translation={translation}>
-        {/* "Workspace" under the pencil, not "Rename": a row titled by its
-            session no longer shows the workspace label this renames, and
-            "Rename workspace" does not fit the panel. VoiceOver hears it whole. */}
+    (_progress: unknown, translation: SharedValue<number>, methods: SwipeableMethods) => trailing === undefined ? null : (
+      <ActionPanel
+        side="right"
+        count={trailing.secondary === undefined ? 1 : 2}
+        seam={trailing.secondary === undefined ? 'tint' : 'neutral'}
+        translation={translation}
+        peak={peak}
+        rowWidth={width.current}>
+        {trailing.secondary !== undefined && (
+          <SwipeAction
+            id={trailing.secondary.id}
+            label={trailing.secondary.label}
+            symbol={trailing.secondary.symbol}
+            tone="neutral"
+            onPress={() => {
+              // Closed before acting, so returning from a sheet does not land
+              // on a row still hanging open behind it.
+              methods.close();
+              trailing.secondary?.run();
+            }}
+          />
+        )}
         <SwipeAction
-          id="rename"
-          label="Workspace"
-          accessibilityLabel="Rename workspace"
-          symbol="pencil"
-          tone="neutral"
-          onPress={() => {
-            // Closed before acting, so returning from the rename sheet does not
-            // land on a row still hanging open behind it.
-            methods.close();
-            onRename();
-          }}
-        />
-        <SwipeAction
-          label="Close"
-          symbol="xmark"
-          tone="destructive"
+          id={trailing.primary.id}
+          label={trailing.primary.label}
+          symbol={trailing.primary.symbol}
+          tone="tint"
           onPress={() => {
             methods.close();
-            onClose();
+            trailing.primary.run();
           }}
         />
       </ActionPanel>
     ),
-    [onRename, onClose]
+    [trailing, peak]
   );
 
   const leadingCount = (onTogglePin !== undefined ? 1 : 0) + (onToggleMute !== undefined ? 1 : 0);
@@ -170,12 +210,7 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
     [pinned, muted, onTogglePin, onToggleMute, leadingCount]
   );
   const leading = leadingCount > 0;
-  const rowActions = [
-    ...(onTogglePin !== undefined ? [{ name: 'pin', label: pinned ? 'Unpin' : 'Pin', run: onTogglePin }] : []),
-    ...(onToggleMute !== undefined ? [{ name: 'mute', label: muted ? 'Unmute notifications' : 'Mute notifications', run: onToggleMute }] : []),
-    { name: 'rename', label: 'Rename workspace', run: onRename },
-    { name: 'close', label: 'Close chat', run: onClose },
-  ];
+  const anchor = useRef<View>(null);
 
   return (
     <ReanimatedSwipeable
@@ -187,30 +222,51 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
       // of the whole row.
       rightThreshold={ACTION_WIDTH / 2}
       leftThreshold={ACTION_WIDTH / 2}
-      overshootRight={false}
+      // Past the panel on the trailing side is the full swipe.
+      overshootRight={trailing !== undefined}
       overshootLeft={false}
+      onSwipeableOpenStartDrag={() => {
+        peak.set(0);
+        useSwipeActivity.getState().began(key);
+      }}
+      onSwipeableClose={() => useSwipeActivity.getState().ended(key)}
       // The panel opening is the moment the gesture committed. Feeling it here
       // rather than on the action tap is what tells you the swipe worked while
       // your thumb is still covering the row.
-      onSwipeableWillOpen={() => {
+      onSwipeableWillOpen={(direction) => {
         haptics.selection();
         onSwiped();
+        // Dragged past the full-swipe line: the first action, no tap needed.
+        if (direction === 'left' && trailing !== undefined && width.current > 0 && -peak.get() > width.current * inbox.fullSwipe) {
+          swipeable.current?.close();
+          trailing.primary.run();
+        }
       }}
       testID={`chat-swipe-${key}`}
-      renderRightActions={renderRightActions}
+      renderRightActions={trailing === undefined ? undefined : renderRightActions}
       renderLeftActions={leading ? renderLeftActions : undefined}>
-      {space === undefined ? (
-        <ChatRow
-          summary={summary}
-          testKey={key}
-          unread={unread}
-          selected={selected}
-          onPress={onPress}
-          onLongPress={onLongPress}
-          pinned={pinned}
-          muted={muted}
-          actions={rowActions}
-        />
+      <View
+        ref={anchor}
+        collapsable={false}
+        onLayout={(event) => {
+          width.current = event.nativeEvent.layout.width;
+        }}>
+      {space === undefined || variant === 'slim' ? (
+          <ChatRow
+            summary={summary}
+            testKey={key}
+            unread={unread}
+            selected={selected}
+            onPress={space === undefined ? onPress : () => space.onOpenLayout(anchor)}
+            onLongPress={onLongPress}
+            pinned={pinned}
+            muted={muted}
+            actions={actions}
+            variant={variant}
+            title={space === undefined ? undefined : spaceTitle(summary)}
+            trailing={trailingLabel}
+            woke={woke}
+          />
       ) : (
         <SpaceCard
           summary={summary}
@@ -222,9 +278,10 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
           onLongPress={onLongPress}
           pinned={pinned}
           muted={muted}
-          actions={rowActions}
+          actions={actions}
         />
       )}
+      </View>
     </ReanimatedSwipeable>
   );
 });
@@ -248,6 +305,8 @@ function ActionPanel({
   count,
   seam,
   translation,
+  peak,
+  rowWidth = 0,
   children,
 }: {
   side: 'left' | 'right';
@@ -255,10 +314,24 @@ function ActionPanel({
   /** The tone of the action next to the row. */
   seam: Tone;
   translation: SharedValue<number>;
+  /** Where the furthest drag of this gesture went (negative: trailing), for the full swipe. */
+  peak?: SharedValue<number>;
+  /** The row's width, which the full-swipe line is a fraction of. */
+  rowWidth?: number;
   children: ReactNode;
 }) {
   const { colors } = useTheme();
   const width = count * ACTION_WIDTH;
+  const line = rowWidth * inbox.fullSwipe;
+  useAnimatedReaction(
+    () => translation.get(),
+    (value, previous) => {
+      if (peak === undefined) return;
+      if (value < peak.get()) peak.set(value);
+      // Felt as the drag crosses the line, so a full swipe is known before the finger lifts.
+      if (line > 0 && previous !== null && previous >= -line && value < -line) scheduleOnRN(haptics.medium);
+    }
+  );
   const style = useAnimatedStyle(() => {
     const offset = translation.get();
     return {

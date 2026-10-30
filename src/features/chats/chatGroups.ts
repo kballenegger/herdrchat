@@ -1,18 +1,36 @@
 import { agentName } from '@/lib/herdr/models';
+import {
+  DEFAULT_SHELVES,
+  NO_INBOX_PREF,
+  SHELF_TITLES,
+  inboxEntries,
+  inboxLayout,
+  type InboxFacts,
+  type InboxPref,
+  type InboxSection,
+  type ShelfId,
+  type ShelfState,
+} from '@/lib/inbox/inbox';
 import type { HostRef } from './listedChat';
 import type { ChatSummary, PaneSummary } from './useWorkspaces';
 
-export const CHAT_GROUPS = [
-  { id: 'pinned', title: 'Pinned' },
-  { id: 'needs-you', title: 'Needs you' },
-  { id: 'working', title: 'Working' },
-  { id: 'idle', title: 'Idle' },
-] as const;
-export type ChatGroupId = (typeof CHAT_GROUPS)[number]['id'];
+export const PINNED_TITLE = 'Pinned';
 
 export type ChatListItem<S extends ChatSummary = ChatSummary> =
-  | { kind: 'group'; id: ChatGroupId; title: string; count: number }
-  | { kind: 'chat'; summary: S }
+  | { kind: 'group'; id: 'pinned'; title: string; count: number }
+  /** A shelf's header: Working, Snoozed or Settled, with its count. Tapping it opens or shuts it. */
+  | { kind: 'shelf'; id: ShelfId; title: string; count: number; expanded: boolean }
+  /** Settled's "Show N more". */
+  | { kind: 'more'; count: number }
+  /** "All clear": the inbox is empty while shelves hold chats. */
+  | { kind: 'clear' }
+  | {
+    kind: 'chat'; summary: S;
+    /** The section it is listed in, which decides its swipe and whether its row is slim. */
+    section: InboxSection;
+    /** It woke from a snooze and has not been opened since. */
+    woke: boolean;
+  }
   /** One agent of a workspace whose card is a space (`spaceCardMode`), listed under it. */
   | {
     kind: 'pane'; summary: S; pane: S['panes'][number];
@@ -35,6 +53,43 @@ export type ChatListItem<S extends ChatSummary = ChatSummary> =
     label: string | null;
     first: boolean;
   };
+
+/** What the inbox knows about one row beyond its summary. */
+export interface RowInbox {
+  pref: InboxPref;
+  openedAt: number | null;
+  returnedAt: number | null;
+  activeSince: number | null;
+  working: boolean;
+}
+
+/** A row's inbox facts: its own status and last message, and what the app knows of it. */
+export function chatFacts(summary: ChatSummary, known: Partial<RowInbox> = {}): InboxFacts {
+  return {
+    status: summary.status,
+    preview: summary.preview,
+    pref: known.pref ?? NO_INBOX_PREF,
+    openedAt: known.openedAt ?? null,
+    returnedAt: known.returnedAt ?? null,
+    activeSince: known.activeSince ?? null,
+    working: known.working ?? summary.status === 'working',
+    // A space card stands for a workspace: its other agents and terminals
+    // would hide with it.
+    canHide: spaceCardMode(summary) === 'chat',
+  };
+}
+
+/** How the inbox lays out a list: its time, its setting, its shelves, each row's facts. */
+export interface InboxContext<S extends ChatSummary = ChatSummary> {
+  now: number;
+  hideWorking: boolean;
+  shelves: ShelfState;
+  /** A row's facts, by the row and its key (`keyOf`). */
+  facts: (summary: S, key: string) => InboxFacts;
+}
+
+/** No prefs, no tracker, nothing hidden: every chat in the inbox by its last message. */
+export const PLAIN_INBOX: InboxContext = { now: 0, hideWorking: false, shelves: DEFAULT_SHELVES, facts: (summary) => chatFacts(summary) };
 
 /**
  * What a workspace's card in Spaces stands for.
@@ -71,23 +126,23 @@ export function paneChats<S extends ChatSummary>(summary: S): readonly S['panes'
 }
 
 /**
- * Pinned chats first, in the order they were pinned, then by live state,
- * keeping the host's order within each group (chats without an agent too),
- * except Idle, where the chat that finished last comes first.
+ * The list's rows: the inbox (`src/lib/inbox`), Pinned first in pin order,
+ * then the chats that came back to you most recently, then the Working,
+ * Snoozed and Settled shelves. Each chat brings its agents' rows under it,
+ * in whatever section it is in.
  *
  * A pinned chat stays in Pinned whatever it is doing: its row already says
  * when it needs you, and a pin that jumped away the moment the agent asked
  * something would not be a pin.
  *
- * A chat on another host is grouped like any other, and found by its host's
+ * A chat on another host is listed like any other, and found by its host's
  * name too. `keyOf` names a row: the workspace id on one host, `rowKey` once a
  * list holds several, whose workspace ids repeat each other's.
  */
 export function groupChats<S extends ChatSummary & { host?: HostRef | null }>(
   summaries: readonly S[],
   query: string,
-  /** When each pinned chat was pinned, by `keyOf`. */
-  pinned: ReadonlyMap<string, number> = new Map(),
+  inbox: InboxContext<S> = PLAIN_INBOX as unknown as InboxContext<S>,
   keyOf: (summary: S) => string = (summary) => summary.workspaceId
 ): ChatListItem<S>[] {
   const needle = query.trim().toLowerCase();
@@ -112,24 +167,22 @@ export function groupChats<S extends ChatSummary & { host?: HostRef | null }>(
     }
     return false;
   });
-  const groupOf = (chat: S): ChatGroupId =>
-    pinned.has(keyOf(chat))
-      ? 'pinned'
-      : chat.status === 'blocked' ? 'needs-you' : chat.status === 'working' ? 'working' : 'idle';
-  return CHAT_GROUPS.flatMap(({ id, title }): ChatListItem<S>[] => {
-    const chats = matches.filter((chat) => groupOf(chat) === id);
-    if (id === 'pinned') chats.sort((a, b) => (pinned.get(keyOf(a)) ?? 0) - (pinned.get(keyOf(b)) ?? 0));
-    // The chat that finished last first, by its last message; one with none keeps its place after them.
-    if (id === 'idle') chats.sort((a, b) => (b.preview?.timestamp ?? 0) - (a.preview?.timestamp ?? 0));
-    if (chats.length === 0) return [];
-    return [
-      { kind: 'group', id, title, count: chats.length },
-      ...chats.flatMap((summary): ChatListItem<S>[] => [
-        { kind: 'chat', summary },
-        ...(panesOf.get(keyOf(summary)) ?? []).map((pane, index, listed): ChatListItem<S> => ({
-          kind: 'pane', summary, pane, first: index === 0, last: index === listed.length - 1,
-        })),
-      ]),
-    ];
+  const layout = inboxLayout(matches, (chat) => inbox.facts(chat, keyOf(chat)), { now: inbox.now, hideWorking: inbox.hideWorking });
+  return inboxEntries(layout, inbox.shelves, needle !== '').flatMap((entry): ChatListItem<S>[] => {
+    switch (entry.kind) {
+      case 'pinned-header': return [{ kind: 'group', id: 'pinned', title: PINNED_TITLE, count: entry.count }];
+      case 'shelf': return [{ kind: 'shelf', id: entry.id, title: SHELF_TITLES[entry.id], count: entry.count, expanded: entry.expanded }];
+      case 'more': return [{ kind: 'more', count: entry.count }];
+      case 'clear': return [{ kind: 'clear' }];
+      case 'row': {
+        const summary = entry.row.item;
+        return [
+          { kind: 'chat', summary, section: entry.row.section, woke: entry.row.woke },
+          ...(panesOf.get(keyOf(summary)) ?? []).map((pane, index, listed): ChatListItem<S> => ({
+            kind: 'pane', summary, pane, first: index === 0, last: index === listed.length - 1,
+          })),
+        ];
+      }
+    }
   });
 }

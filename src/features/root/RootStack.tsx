@@ -138,6 +138,15 @@ export function RootStack() {
             sheetCornerRadius: Platform.OS === 'android' ? radius.lg : undefined,
           }}
         />
+        {/* A custom snooze: a day and a typed time, sized like the rename sheet. */}
+        <Stack.Screen
+          name="snooze"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: 'fitToContents',
+            sheetCornerRadius: Platform.OS === 'android' ? radius.lg : undefined,
+          }}
+        />
         {/* A workspace's layout on a phone, sized to its tabs like the rename
             sheet. iPad shows the same drawing as a floating card level with
             the layout button instead, beside the list when there is room

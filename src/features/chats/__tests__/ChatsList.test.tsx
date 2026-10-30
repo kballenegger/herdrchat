@@ -6,6 +6,7 @@ import { HerdrClient } from '@/lib/herdr/client';
 import { DemoHost } from '@/lib/demo/host';
 import { useChatSelection } from '@/state/chatSelection';
 import { useSpaceLayoutSheet } from '@/state/spaceLayout';
+import { useInboxShelves } from '@/state/inboxShelves';
 import ChatsList from '../ChatsList';
 import { listChats, type ListedChat } from '../listedChat';
 import { buildSummaries } from '../useWorkspaces';
@@ -74,7 +75,7 @@ jest.mock('../../../../modules/herdr-terminal/src', () => ({
 }));
 jest.mock('@/state/db', () => ({ loadThreadReads: async () => new Map(), setSetting: async () => undefined }));
 jest.mock('@/state/saveSetting', () => ({ saveSetting: jest.fn() }));
-const mockSettings = { listMode: 'spaces', seenSwipeHint: true, starAsked: true, activeDays: '', pollScale: 1 };
+const mockSettings = { listMode: 'spaces', seenSwipeHint: true, starAsked: true, activeDays: '', pollScale: 1, hideWorking: true, settleAfterDays: 0 };
 jest.mock('@/state/settings', () => ({
   useSettings: Object.assign((select: (state: typeof mockSettings) => unknown) => select(mockSettings), { getState: () => mockSettings }),
   encodeBool: (value: boolean) => String(value),
@@ -88,11 +89,17 @@ jest.mock('../useHostChats', () => ({
 }));
 /** Workspaces pinned in a test, by id. */
 let mockPinned: readonly string[] = [];
+/** Inbox choices made in a test, by chat key. */
+let mockInboxPrefs: Record<string, object> = {};
 jest.mock('../useChatPrefs', () => ({
   useChatPrefs: () => ({
     pinnedAt: new Map(), isPinned: (chat: { workspaceId: string }) => mockPinned.includes(chat.workspaceId),
     isMuted: () => false, canMute: () => false,
     togglePin: jest.fn(), toggleMute: jest.fn(), error: null, clearError: jest.fn(),
+    inboxPrefOf: (chat: { workspaceId: string; chatKey?: string }) => ({
+      ...jest.requireActual('@/lib/inbox/inbox').NO_INBOX_PREF, ...mockInboxPrefs[chat.chatKey ?? chat.workspaceId],
+    }),
+    changeInbox: async () => null, restore: async () => undefined,
   }),
 }));
 jest.mock('../useOutdatedIntegrations', () => ({ useOutdatedIntegrations: () => ({ issues: [], updating: false, error: null, update: jest.fn() }) }));
@@ -115,6 +122,9 @@ beforeEach(() => {
   mockPush.mockClear();
   mockOpenChat.mockClear();
   mockPinned = [];
+  mockInboxPrefs = {};
+  mockSettings.listMode = 'spaces';
+  useInboxShelves.setState({ expanded: { working: false, snoozed: false, settled: true }, settledPages: 1 });
   mockTerminalAvailable = true;
   useChatSelection.setState({ detail: null });
 });
@@ -280,5 +290,50 @@ describe('on iPad', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('the inbox', () => {
+  // The Demo's w6:p2 is working. In Agents it is a chat of its own, which
+  // waits on the Working shelf, shut, until the header is tapped.
+  it('holds a working agent on a shut Working shelf, and opens it from the header', async () => {
+    mockSettings.listMode = 'agents';
+    const screen = await render(<ChatsList />);
+    expect(screen.getByTestId('inbox-shelf-working')).toHaveProp('accessibilityLabel', 'Working · 1');
+    expect(screen.queryByTestId('chat-row-w6:p2')).toBeNull();
+    expect(screen.getByTestId('chat-row-w6:p1')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByTestId('inbox-shelf-working'));
+    expect(screen.getByTestId('chat-row-w6:p2')).toBeOnTheScreen();
+  });
+
+  // In Spaces w6 is a space card: its idle agent and its terminals would hide
+  // with it, so it stays in the inbox.
+  it('never hides a space card on the Working shelf', async () => {
+    const screen = await render(<ChatsList />);
+    expect(screen.queryByTestId('inbox-shelf-working')).toBeNull();
+    expect(screen.getByTestId('chat-row-w6')).toBeOnTheScreen();
+  });
+
+  it('lists a settled chat as a slim row under Settled, and a snoozed one under a shut Snoozed', async () => {
+    mockInboxPrefs = {
+      w2: { settledAt: Date.now() - 60_000, settledReason: 'user' },
+      w3: { snoozedUntil: Date.now() + 3_600_000 - 1_000, snoozedAt: Date.now() },
+    };
+    const screen = await render(<ChatsList />);
+    expect(screen.getByTestId('inbox-shelf-settled')).toHaveProp('accessibilityLabel', 'Settled · 1');
+    expect(screen.getByTestId('chat-row-w2')).toHaveProp('accessibilityLabel', expect.stringMatching(/^Release notes summary, /));
+    expect(screen.getByTestId('chat-row-trailing-w2')).toBeOnTheScreen();
+    expect(screen.getByTestId('inbox-shelf-snoozed')).toHaveProp('accessibilityLabel', 'Snoozed · 1');
+    expect(screen.queryByTestId('chat-row-w3')).toBeNull();
+    await fireEvent.press(screen.getByTestId('inbox-shelf-snoozed'));
+    expect(screen.getByTestId('chat-row-trailing-w3')).toHaveTextContent('1h');
+  });
+
+  it('opens every shelf for a search', async () => {
+    mockInboxPrefs = { w3: { snoozedUntil: Date.now() + 3_600_000, snoozedAt: Date.now() } };
+    const screen = await render(<ChatsList />);
+    await fireEvent.changeText(screen.getByTestId('chat-search'), 'scratch');
+    expect(screen.getByTestId('inbox-shelf-snoozed')).toHaveProp('accessibilityState', { expanded: true });
+    expect(screen.getByTestId('chat-row-w3')).toBeOnTheScreen();
   });
 });

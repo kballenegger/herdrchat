@@ -1,12 +1,13 @@
 import type { ListMode } from '@/lib/listModes';
 import { withAgentTerminals, withTerminalRows, type ListItemWithTerminals } from '@/features/terminal/listRows';
 import { agentRowKey, agentRows } from './agentRows';
-import { groupChats } from './chatGroups';
+import { groupChats, type InboxContext } from './chatGroups';
 import { rowKey, type ListedChat } from './listedChat';
 
 /**
- * The chats list's rows in either view. Both are grouped by the one function,
- * so pins, search and the attention order cannot drift apart between them.
+ * The chats list's rows in either view. Both are laid out by the one function
+ * (the inbox, `groupChats`), so pins, shelves, search and the order cannot
+ * drift apart between them.
  *
  * Spaces hangs each workspace's panes that are not chats (a shell, a build)
  * under its card, after its agents, and they open the pane's terminal.
@@ -20,10 +21,10 @@ export function chatListRows(
   mode: ListMode,
   summaries: readonly ListedChat[],
   query: string,
-  pinnedAt: ReadonlyMap<string, number>,
+  inbox: InboxContext<ListedChat>,
   terminalAvailable: boolean
 ): ListItemWithTerminals<ListedChat>[] {
   return mode === 'agents'
-    ? withAgentTerminals(groupChats(agentRows(summaries), query, pinnedAt, agentRowKey), summaries, query)
-    : withTerminalRows(groupChats(summaries, query, pinnedAt, rowKey), terminalAvailable);
+    ? withAgentTerminals(groupChats(agentRows(summaries), query, inbox, agentRowKey), summaries, query)
+    : withTerminalRows(groupChats(summaries, query, inbox, rowKey), terminalAvailable);
 }

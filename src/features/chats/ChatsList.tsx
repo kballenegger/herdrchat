@@ -20,6 +20,9 @@ import { useHostRecovery } from './useHostRecovery';
 import { useListReads } from './useListReads';
 import { SkeletonRows } from '@/features/chats/SkeletonRows';
 import { useChatPrefs } from '@/features/chats/useChatPrefs';
+import { useInbox } from './useInbox';
+import { useInboxActions } from './useInboxActions';
+import { UndoNotice } from './UndoNotice';
 import type { ListItemWithTerminals } from '@/features/terminal/listRows';
 import { chatListRows } from './chatListRows';
 import { isTerminalAvailable } from '../../../modules/herdr-terminal/src';
@@ -121,17 +124,13 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
   const prefs = useChatPrefs(db, connection, summaries, connectionIds);
   const listMode = useSettings((state) => state.listMode);
   const list = useRef<FlashListRef<ListItemWithTerminals<ListedChat>>>(null);
-  // The other view opens at its top, at Needs you, as Mail does after a
+  // The other view opens at its top, at the inbox, as Mail does after a
   // filter change: the same list under new rows kept the old offset, and
-  // landed partway down, past the groups that matter.
+  // landed partway down, past the chats that matter.
   const chooseListMode = useCallback((mode: ListMode) => {
     list.current?.scrollToOffset({ offset: 0, animated: false });
     saveSetting(db, 'listMode', mode);
   }, [db]);
-  const rows = useMemo(
-    () => chatListRows(listMode, summaries, query, prefs.pinnedAt, isTerminalAvailable),
-    [listMode, summaries, query, prefs.pinnedAt]
-  );
   const { keyChanged, storedPin, fixing, recover } = useHostRecovery({ connection, client, error, errorCode, refresh });
   // The selection names the pane too; the prop only says which workspace, and
   // a pane row and its workspace's row are never selected together. A pane
@@ -165,7 +164,14 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
   const openTerminalKey = terminalConnectionId === undefined || terminalPaneId === undefined
     ? null : `${terminalConnectionId}\n${terminalPaneId}`;
   const reads = useListReads(db, connectionIds.join('\n'), open, refresh);
-  const listExtra = useMemo(() => ({ open, reads, openTerminalKey }), [open, reads, openTerminalKey]);
+  // The inbox: each row's section and order, and the rules that move them.
+  const inbox = useInbox({ summaries, prefs, reads, searching: query.trim() !== '' });
+  const inboxActions = useInboxActions(prefs);
+  const rows = useMemo(
+    () => chatListRows(listMode, summaries, query, inbox, isTerminalAvailable),
+    [listMode, summaries, query, inbox]
+  );
+  const listExtra = useMemo(() => ({ open, reads, openTerminalKey, now: inbox.now }), [open, reads, openTerminalKey, inbox.now]);
   const insets = useSafeAreaInsets();
 
   const actions = useChatActions<ListedChat>({
@@ -374,6 +380,9 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
           extraData={listExtra}
           keyExtractor={(item) =>
             item.kind === 'group' ? `group-${item.id}`
+              : item.kind === 'shelf' ? `shelf-${item.id}`
+              : item.kind === 'more' ? 'settled-more'
+              : item.kind === 'clear' ? 'all-clear'
               : item.kind === 'pane' ? `pane-${rowKey(item.summary)}-${item.pane.paneId}`
                 : item.kind === 'terminal' ? `terminal-${rowKey(item.summary)}-${item.terminal.paneId}`
                 : item.kind === 'tab' ? `${rowKey(item.summary)}/tab/${item.tabId}`
@@ -431,6 +440,8 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
               row={row}
               prefs={prefs}
               actions={actions}
+              inbox={inboxActions}
+              now={inbox.now}
               open={open}
               reads={reads}
               openTerminalKey={openTerminalKey}
@@ -457,6 +468,7 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
           }
         />
       )}
+      <UndoNotice />
       <LayoutPeekOverlay
         column={peek.column}
         peek={peek.peek}

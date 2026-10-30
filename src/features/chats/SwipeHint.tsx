@@ -58,7 +58,7 @@ export function SwipeHint() {
         paddingVertical: spacing.sm,
       }}>
       <Text variant="caption" color="secondary">
-        Swipe a chat either way to pin, mute, rename or close it
+        Swipe a chat right to pin or mute it, left to settle or snooze it
       </Text>
       <Animated.View style={style}>
         <Icon

@@ -11,8 +11,10 @@ import { rowTitle } from './rowText';
 import type { ChatSummary } from './useWorkspaces';
 
 /**
- * Rename and close, as the three affordances that reach them: a swipe action, a
- * long-press menu, and the confirmation each destructive one goes through.
+ * Rename and close, as the affordances that reach them: the long-press menu,
+ * VoiceOver's actions, and the confirmation each destructive one goes
+ * through. The trailing swipe is the inbox's (Settle, Snooze), so these two
+ * live in the menu.
  *
  * Out of the route because it is not layout. The screen composes rows; this
  * decides what happens to a workspace and how a person is asked first.
@@ -42,7 +44,7 @@ export function useChatActions<S extends ChatSummary = ChatSummary>({
   clearError: () => void;
   renameChat: (summary: S) => void;
   closeChat: (summary: S) => void;
-  /** `extra` goes above Rename and Close: pin and mute, which are the chat list's. */
+  /** `extra` goes above Rename and Close: pin, mute and the inbox's, which are the chat list's. */
   manageChat: (summary: S, extra?: readonly SheetAction[]) => void;
 } {
   const router = useRouter();
@@ -105,11 +107,12 @@ export function useChatActions<S extends ChatSummary = ChatSummary>({
   );
 
   /**
-   * The same two actions the row's swipe offers, as a long-press menu.
+   * The chat's menu: the list's own actions (`extra`: pin, mute, settle,
+   * snooze), then Rename and Close.
    *
-   * Both affordances on purpose. The swipe is faster once you know it is there,
-   * and the long press is the one a person finds by trying things — an action
-   * reachable only by a gesture is an action most people never reach.
+   * The long press is the one a person finds by trying things, so everything
+   * a swipe does is here too: an action reachable only by a gesture is an
+   * action most people never reach.
    */
   const manageChat = useCallback(
     (summary: S, extra: readonly SheetAction[] = []) => {

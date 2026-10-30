@@ -28,6 +28,8 @@ const mockClient = {};
 const mockPrefs = {
   pinnedAt: new Map(), isPinned: () => false, isMuted: () => false, canMute: () => false,
   togglePin: () => {}, toggleMute: () => {}, error: null, clearError: () => {},
+  inboxPrefOf: () => jest.requireActual('@/lib/inbox/inbox').NO_INBOX_PREF,
+  changeInbox: async () => null, restore: async () => undefined,
 };
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));

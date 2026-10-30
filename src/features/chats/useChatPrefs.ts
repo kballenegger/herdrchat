@@ -3,17 +3,20 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { publishMutedChats } from '@/features/notifications/mutedChats';
-import { prefSource, type ChatPref, type PrefRef } from '@/lib/chatPrefs';
+import { activePref, prefSource, type ChatPref, type ChatPrefChange, type PrefRef } from '@/lib/chatPrefs';
+import { NO_INBOX_PREF, type InboxPref } from '@/lib/inbox/inbox';
 import { errorText } from '@/lib/herdr/protocol';
 import { haptics } from '@/components/haptics';
 import { resolveConnection, type ServerConnection } from '@/state/connections';
-import { loadChatPrefs, saveChatPref } from '@/state/db';
+import { loadChatPrefs, restoreChatPref, saveChatPref } from '@/state/db';
+import { inboxClock } from '@/state/inboxClock';
 import { agentPrefRow } from './agentRows';
 import { paneChats } from './chatGroups';
 import { rowKey, type ListedChat } from './listedChat';
 
 /**
- * Pinned and muted chats on one host, and the two toggles.
+ * Pinned, muted, settled and snoozed chats on the listed hosts, and the
+ * changes to each.
  *
  * Both need the chat's session: a pin or mute belongs to a conversation, and
  * herdr hands its workspace slot to the next one (see `chatPrefs`). A chat
@@ -48,6 +51,20 @@ export function useChatPrefs(
   canMute: (summary: PrefRow) => boolean;
   togglePin: (summary: PrefRow) => void;
   toggleMute: (summary: PrefRow) => void;
+  /**
+   * A row's inbox choices in force: its own pref's settle and snooze, and the
+   * pin that pins it, its own or one it inherits (`prefSource`).
+   */
+  inboxPrefOf: (summary: PrefRow) => InboxPref;
+  /**
+   * Change the inbox choices on a row's own pref, unpinning whatever pins it
+   * when `unpin` is set (settling or snoozing a pinned chat unpins it), and
+   * resolve with what it was, for Undo. Null when the row has no session to
+   * file a pref under.
+   */
+  changeInbox: (summary: PrefRow, change: ChatPrefChange, options?: { unpin?: boolean }) => Promise<PrefSnapshot | null>;
+  /** Put back what `changeInbox` changed, exactly. */
+  restore: (snapshot: PrefSnapshot) => Promise<void>;
   /** A mute saved here that could not reach the host. */
   error: string | null;
   clearError: () => void;
@@ -142,8 +159,50 @@ export function useChatPrefs(
     [db, sourceOf, reload]
   );
 
+  const inboxPrefOf = useCallback(
+    (summary: PrefRow): InboxPref => {
+      const own = summary.sessionSig === null ? null
+        : activePref(prefs.get(summary.connectionId) ?? NO_PREFS, prefKey(summary), summary.sessionSig);
+      return { ...NO_INBOX_PREF, ...(own === null ? {} : inboxPart(own)), pinnedAt: pinOf(summary) };
+    },
+    [prefs, pinOf]
+  );
+
+  const changeInbox = useCallback(
+    async (summary: PrefRow, change: ChatPrefChange, options: { unpin?: boolean } = {}): Promise<PrefSnapshot | null> => {
+      if (summary.sessionSig === null) return null;
+      const own = { key: prefKey(summary), sessionSig: summary.sessionSig };
+      const pin = options.unpin === true ? sourceOf(summary, 'pin') : null;
+      // From the database rather than the loaded map: a write a moment ago
+      // (an Undo, a rule) may not have reloaded yet.
+      const stored = await loadChatPrefs(db, summary.connectionId);
+      const keys = [...new Set([own.key, ...(pin === null ? [] : [pin.key])])];
+      const snapshot: PrefSnapshot = { connectionId: summary.connectionId, prefs: keys.map((key) => ({ key, pref: stored.get(key) ?? null })) };
+      if (pin !== null && pin.key !== own.key && pin.sessionSig !== null) {
+        await saveChatPref(db, summary.connectionId, pin.key, pin.sessionSig, { pinnedAt: null });
+      }
+      await saveChatPref(db, summary.connectionId, own.key, own.sessionSig, pin === null ? change : { ...change, pinnedAt: null });
+      await reload();
+      inboxClock.touch();
+      return snapshot;
+    },
+    [db, sourceOf, reload]
+  );
+
+  const restore = useCallback(
+    async (snapshot: PrefSnapshot) => {
+      for (const { key, pref } of snapshot.prefs) await restoreChatPref(db, snapshot.connectionId, key, pref);
+      await reload();
+      inboxClock.touch();
+    },
+    [db, reload]
+  );
+
   return {
     pinnedAt,
+    inboxPrefOf,
+    changeInbox,
+    restore,
     isPinned: (summary) => sourceOf(summary, 'pin') !== null,
     isMuted: (summary) => canMute(summary) && sourceOf(summary, 'mute') !== null,
     canMute,
@@ -155,6 +214,24 @@ export function useChatPrefs(
 }
 
 const NO_PREFS: ReadonlyMap<string, ChatPref> = new Map();
+
+/** The stored prefs a change touched, as they were: what Undo writes back. */
+export interface PrefSnapshot {
+  connectionId: string;
+  prefs: readonly { key: string; pref: ChatPref | null }[];
+}
+
+/** A pref's inbox choices, without its pin (which may be inherited) or session. */
+function inboxPart(pref: ChatPref): Omit<InboxPref, 'pinnedAt'> {
+  return {
+    settledAt: pref.settledAt,
+    settledReason: pref.settledReason,
+    unsettledAt: pref.unsettledAt,
+    snoozedUntil: pref.snoozedUntil,
+    snoozedAt: pref.snoozedAt,
+    autoSettle: pref.autoSettle,
+  };
+}
 
 /**
  * What a pin or mute is made on: a row's connection, its session, and the
