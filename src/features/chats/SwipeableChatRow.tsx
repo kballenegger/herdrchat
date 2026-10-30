@@ -13,6 +13,7 @@ import { haptics } from '@/components/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
 import { inbox, minTouchTarget, radius, spacing } from '@/theme/tokens';
 import { useSwipeActivity } from '@/state/swipeActivity';
+import { fullSwipeLine, isFullSwipe } from '@/lib/inbox/swipe';
 import type { LayoutAnchor } from '@/features/spaces/LayoutPeek';
 import { ChatRow, type RowAction } from './ChatRow';
 import { SpaceCard } from './SpaceCard';
@@ -21,11 +22,12 @@ import { spaceTitle } from './rowText';
 import type { ChatSummary } from './useWorkspaces';
 
 /**
- * A chat row with swipe actions: Pin and Mute on the leading side, and the
- * inbox on the trailing one (`TrailingSwipe`): Settle and Snooze for a chat in
- * the inbox, Unsettle for a settled one, Wake for a snoozed one. A full
- * trailing swipe, past `inbox.fullSwipe` of the row, commits the first action
- * without a tap, as Mail's does.
+ * A chat row with swipe actions: Pin and Mute on the leading side, and on the
+ * trailing one (`TrailingSwipe`) Rename and Close as Messages splits them, or
+ * while the list is an inbox Settle and Snooze for a chat in the inbox,
+ * Unsettle for a settled one, Wake for a snoozed one. An inbox swipe dragged
+ * past the panel (`fullSwipeLine`) commits its first action without a tap,
+ * as Mail's does.
  *
  * `ChatRow` stays presentational — it does not know it can be swiped, which is
  * what lets it keep being used wherever a row is drawn without one.
@@ -40,20 +42,32 @@ import type { ChatSummary } from './useWorkspaces';
  */
 const ACTION_WIDTH = 76;
 
-/** One trailing action: what it is called, its glyph, and what it does. */
+/** One trailing action: what it is called, its glyph, its colour, and what it does. */
 export interface SwipeChoice {
   /** Names its test id (`swipe-action-settle`). */
-  id: 'settle' | 'snooze' | 'unsettle' | 'wake';
+  id: 'settle' | 'snooze' | 'unsettle' | 'wake' | 'rename' | 'close';
   label: string;
+  /** What VoiceOver reads when `label` is shortened to fit the panel. */
+  accessibilityLabel?: string;
   symbol: IconName;
+  tone: Tone;
   run: () => void;
 }
 
-/** The trailing side: its first action, in the tint, and maybe a second beside it. */
+/**
+ * The trailing side: its outer action, and maybe a second beside the row.
+ * With `full`, dragging past the panel (`fullSwipeLine`) runs the outer one
+ * without a tap: the inbox's Settle, Unsettle or Wake. Without it, the panel
+ * only opens: Rename and Close, while the list is not an inbox, as they
+ * always were (no full swipe ever closes a workspace).
+ */
 export interface TrailingSwipe {
   primary: SwipeChoice;
   secondary?: SwipeChoice;
+  full: boolean;
 }
+
+const fullSwipeOptions = { fraction: inbox.fullSwipe, margin: inbox.fullSwipeMargin };
 
 export const SwipeableChatRow = memo(function SwipeableChatRow({
   summary,
@@ -146,16 +160,17 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
       <ActionPanel
         side="right"
         count={trailing.secondary === undefined ? 1 : 2}
-        seam={trailing.secondary === undefined ? 'tint' : 'neutral'}
+        seam={(trailing.secondary ?? trailing.primary).tone}
         translation={translation}
-        peak={peak}
+        peak={trailing.full ? peak : undefined}
         rowWidth={width.current}>
         {trailing.secondary !== undefined && (
           <SwipeAction
             id={trailing.secondary.id}
             label={trailing.secondary.label}
+            accessibilityLabel={trailing.secondary.accessibilityLabel}
             symbol={trailing.secondary.symbol}
-            tone="neutral"
+            tone={trailing.secondary.tone}
             onPress={() => {
               // Closed before acting, so returning from a sheet does not land
               // on a row still hanging open behind it.
@@ -167,8 +182,9 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
         <SwipeAction
           id={trailing.primary.id}
           label={trailing.primary.label}
+          accessibilityLabel={trailing.primary.accessibilityLabel}
           symbol={trailing.primary.symbol}
-          tone="tint"
+          tone={trailing.primary.tone}
           onPress={() => {
             methods.close();
             trailing.primary.run();
@@ -216,14 +232,17 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
     <ReanimatedSwipeable
       containerStyle={{ borderRadius: radius.sm, overflow: 'hidden', marginBottom: spacing.sm }}
       ref={swipeable}
-      friction={2}
+      // Half the finger's travel, as it always was; but a row with a full
+      // swipe follows the finger, or the line past the panel
+      // (`fullSwipeLine`) would need a drag wider than the phone.
+      friction={trailing?.full === true ? 1 : 2}
       // Both actions have to be reachable before the panel snaps open, so the
       // threshold is a fraction of the panel rather than the default half-width
       // of the whole row.
       rightThreshold={ACTION_WIDTH / 2}
       leftThreshold={ACTION_WIDTH / 2}
       // Past the panel on the trailing side is the full swipe.
-      overshootRight={trailing !== undefined}
+      overshootRight={trailing?.full === true}
       overshootLeft={false}
       onSwipeableOpenStartDrag={() => {
         peak.set(0);
@@ -237,7 +256,8 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
         haptics.selection();
         onSwiped();
         // Dragged past the full-swipe line: the first action, no tap needed.
-        if (direction === 'left' && trailing !== undefined && width.current > 0 && -peak.get() > width.current * inbox.fullSwipe) {
+        if (direction === 'left' && trailing?.full === true
+          && isFullSwipe(peak.get(), width.current, panelWidth(trailing), fullSwipeOptions)) {
           swipeable.current?.close();
           trailing.primary.run();
         }
@@ -279,6 +299,7 @@ export const SwipeableChatRow = memo(function SwipeableChatRow({
           pinned={pinned}
           muted={muted}
           actions={actions}
+          woke={woke}
         />
       )}
       </View>
@@ -322,7 +343,7 @@ function ActionPanel({
 }) {
   const { colors } = useTheme();
   const width = count * ACTION_WIDTH;
-  const line = rowWidth * inbox.fullSwipe;
+  const line = rowWidth > 0 ? fullSwipeLine(rowWidth, width, fullSwipeOptions) : 0;
   useAnimatedReaction(
     () => translation.get(),
     (value, previous) => {
@@ -356,7 +377,12 @@ function ActionPanel({
   );
 }
 
-type Tone = 'neutral' | 'tint' | 'destructive';
+export type Tone = 'neutral' | 'tint' | 'destructive';
+
+/** How wide a trailing panel is: one action or two. */
+function panelWidth(trailing: TrailingSwipe): number {
+  return (trailing.secondary === undefined ? 1 : 2) * ACTION_WIDTH;
+}
 
 function toneBackground(colors: ReturnType<typeof useTheme>['colors'], tone: Tone): string {
   return tone === 'destructive' ? colors.destructive : tone === 'tint' ? colors.tint : colors.swipeNeutral;

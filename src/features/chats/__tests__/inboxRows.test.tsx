@@ -6,6 +6,7 @@ import { useUndoNotice } from '@/state/undoNotice';
 import { inbox } from '@/theme/tokens';
 import { ChatRow } from '../ChatRow';
 import { AllClearRow, ShelfHeader, ShowMoreRow } from '../ShelfHeader';
+import { SpaceCard } from '../SpaceCard';
 import { UndoNotice } from '../UndoNotice';
 import type { ChatSummary } from '../useWorkspaces';
 
@@ -88,5 +89,27 @@ describe('the undo notice', () => {
     expect(screen.getByTestId('undo-notice')).toBeOnTheScreen();
     await act(async () => jest.advanceTimersByTime(inbox.undoNotice));
     expect(screen.queryByTestId('undo-notice')).toBeNull();
+  });
+});
+
+// A space card (a workspace of several agents) that woke from a snooze is
+// marked too: it went back to the inbox with no mark before.
+describe('a space card that woke', () => {
+  const agent = (paneId: string) => ({
+    agent: 'claude', agentStatus: 'idle' as const, cwd: '/home/demo/api', foregroundCwd: null, focused: false, paneId, tabId: 't1', terminalId: null,
+    workspaceId: 'w6', agentSession: null, stateChangeSeq: null, completionSeq: null, inputPending: false, name: null, title: null,
+  });
+  const agents = [agent('w6:p1'), agent('w6:p2')];
+  const space: ChatSummary = {
+    ...summary, workspaceId: 'w6', title: 'api', agents,
+    panes: agents.map((item) => ({ paneId: item.paneId, agent: item, sessionSig: `sig-${item.paneId}`, preview: null, status: 'idle' as const, sessionTitle: null, agentName: null })),
+  };
+
+  it('says "Woke" under its status mark, and to VoiceOver', async () => {
+    const screen = await render(<SpaceCard summary={space} unread={false} onOpenLayout={() => undefined} woke />);
+    expect(screen.getByTestId('chat-row-woke-w6')).toHaveTextContent('Woke');
+    expect(screen.getByTestId('chat-row-w6')).toHaveProp('accessibilityLabel', expect.stringMatching(/^api, Woke, /));
+    const plain = await render(<SpaceCard summary={space} unread={false} onOpenLayout={() => undefined} />);
+    expect(plain.queryByTestId('chat-row-woke-w6')).toBeNull();
   });
 });

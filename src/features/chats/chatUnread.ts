@@ -92,3 +92,29 @@ export function chatWantsYou(
     : panes.some((pane) => pane !== onScreen && needsAttention(pane.status));
   return blocked || isChatUnread(summary, reads, open);
 }
+
+/**
+ * When a row's chat was last seen, for the inbox's "Woke" mark: its own read
+ * marker, or for an agent of several the workspace's merged thread too when
+ * that held this agent (as `isPaneUnread` counts it), whichever is later.
+ * The chat on screen beside the list (iPad, `open`, by `chatKey`) is being
+ * seen right now (`now`): its marker is only stamped when it closes. Null
+ * when it has never been opened.
+ */
+export function rowOpenedAt(
+  row: { workspaceId: string; sessionSig: string | null; chatKey?: string },
+  reads: ReadonlyMap<string, ThreadRead>,
+  open: string | null,
+  now: number
+): number | null {
+  const own = row.chatKey ?? row.workspaceId;
+  if (open !== null && (open === own || open === row.workspaceId)) return now;
+  if (row.sessionSig === null) return null;
+  const mine = reads.get(own);
+  const seen = mine !== undefined && mine.sessionSig === row.sessionSig ? [mine.openedAt] : [];
+  if (own !== row.workspaceId) {
+    const merged = reads.get(row.workspaceId);
+    if (merged !== undefined && merged.sessionSig.split(',').includes(row.sessionSig)) seen.push(merged.openedAt);
+  }
+  return seen.length === 0 ? null : Math.max(...seen);
+}

@@ -196,10 +196,25 @@ describe('chatListRows', () => {
   });
 
   // An agent row carries no shells. An agent the app has no reader for is a
-  // terminal row of its own there, under no card, at the end of the inbox:
-  // it has no conversation to settle or snooze, and a shelf could not open it.
+  // terminal row of its own there, under no card, in its status's group.
   it('lists no shells in Agents, and an agent the app cannot read as a terminal row of its own', async () => {
-    const hiding = { ...plain, hideWorking: true };
+    const rows = chatListRows('agents', await listed(), '', plain, true);
+    const terminals = rows.filter((row) => row.kind === 'terminal');
+    expect(terminals.map((row) => [row.terminal.paneId, row.standalone])).toEqual([['w9:p1', true]]);
+    const idle = rows.findIndex((row) => row.kind === 'group' && row.id === 'idle');
+    const idleRows = rows.slice(idle + 1);
+    expect(idleRows.at(-1)).toMatchObject({ kind: 'terminal' });
+    expect(rows[idle]).toMatchObject({ kind: 'group', count: rows.filter((row, index) => index > idle && row.kind !== 'group').length });
+    expect(rows.some((row) => row.kind === 'chat' && row.summary.workspaceId === 'w6')).toBe(true);
+    // A search finds it by its agent's name, and leaves it out otherwise.
+    expect(chatListRows('agents', await listed(), 'opencode', plain, true).filter((row) => row.kind === 'terminal')).toHaveLength(1);
+    expect(chatListRows('agents', await listed(), 'grok', plain, true).filter((row) => row.kind === 'terminal')).toHaveLength(0);
+  });
+
+  // As an inbox, it is at the end of the inbox: it has no conversation to
+  // settle or snooze, and a shelf could not open it.
+  it('lists an agent the app cannot read at the end of the inbox, before the shelves', async () => {
+    const hiding = { ...plain, enabled: true, hideWorking: true };
     const rows = chatListRows('agents', await listed(), '', hiding, true);
     const terminals = rows.filter((row) => row.kind === 'terminal');
     expect(terminals.map((row) => [row.terminal.paneId, row.standalone])).toEqual([['w9:p1', true]]);
@@ -208,14 +223,13 @@ describe('chatListRows', () => {
     expect(rows[shelf - 1]).toMatchObject({ kind: 'terminal' });
     expect(rows.some((row) => row.kind === 'chat' && row.summary.workspaceId === 'w6')).toBe(true);
     // A search finds it by its agent's name, and leaves it out otherwise.
-    expect(chatListRows('agents', await listed(), 'opencode', plain, true).filter((row) => row.kind === 'terminal')).toHaveLength(1);
-    expect(chatListRows('agents', await listed(), 'grok', plain, true).filter((row) => row.kind === 'terminal')).toHaveLength(0);
+    expect(chatListRows('agents', await listed(), 'opencode', hiding, true).filter((row) => row.kind === 'terminal')).toHaveLength(1);
   });
 
   // With every chat on a shelf, the terminal row is still in the inbox, so
   // the inbox is not "All clear".
   it('keeps an unreadable agent\'s row in place of "All clear"', async () => {
-    const settled = { ...plain, facts: (summary: ListedChat) => chatFacts(summary, { pref: { ...NO_INBOX_PREF, settledAt: 1 } }) };
+    const settled = { ...plain, enabled: true, facts: (summary: ListedChat) => chatFacts(summary, { pref: { ...NO_INBOX_PREF, settledAt: 1 } }) };
     const rows = chatListRows('agents', await listed(), '', settled, true);
     expect(rows[0]).toMatchObject({ kind: 'terminal' });
     expect(rows.some((row) => row.kind === 'clear')).toBe(false);

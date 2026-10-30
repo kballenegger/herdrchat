@@ -164,6 +164,9 @@ setup_device() {
 #                     failure does not leave every later flow on Agents)
 #   chat_prefs        chat-list pins and mutes a Demo chat; inbox settles and
 #                     snoozes some (cleared after it too)
+#   inbox             inbox turns the list into an inbox and back (cleared
+#                     after it too, so a failure does not leave every later
+#                     flow on an inbox they do not expect)
 #   hideWorking       inbox turns it off and on
 reset_for() {
   db=$1
@@ -173,7 +176,7 @@ reset_for() {
     regression/composer-keys) sqlite3 "$db" "delete from settings where key='returnSends'" ;;
     regression/list-modes) sqlite3 "$db" "delete from settings where key='listMode'" ;;
     regression/chat-list) sqlite3 "$db" "delete from chat_prefs where connection_id='demo'" ;;
-    regression/inbox) sqlite3 "$db" "delete from chat_prefs where connection_id='demo'; delete from settings where key='hideWorking'" ;;
+    regression/inbox) sqlite3 "$db" "delete from chat_prefs where connection_id='demo'; delete from settings where key in ('inbox', 'hideWorking')" ;;
   esac 2>/dev/null
   return 0
 }

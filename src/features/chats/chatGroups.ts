@@ -16,8 +16,18 @@ import type { ChatSummary, PaneSummary } from './useWorkspaces';
 
 export const PINNED_TITLE = 'Pinned';
 
+/** The list's groups while it is not an inbox (the setting `inbox` off): as it always was. */
+export const CHAT_GROUPS = [
+  { id: 'pinned', title: PINNED_TITLE },
+  { id: 'needs-you', title: 'Needs you' },
+  { id: 'working', title: 'Working' },
+  { id: 'idle', title: 'Idle' },
+] as const;
+export type ChatGroupId = (typeof CHAT_GROUPS)[number]['id'];
+
 export type ChatListItem<S extends ChatSummary = ChatSummary> =
-  | { kind: 'group'; id: 'pinned'; title: string; count: number }
+  /** A group's header: Pinned, or with the inbox off, Needs you, Working or Idle. */
+  | { kind: 'group'; id: ChatGroupId; title: string; count: number }
   /** A shelf's header: Working, Snoozed or Settled, with its count. Tapping it opens or shuts it. */
   | { kind: 'shelf'; id: ShelfId; title: string; count: number; expanded: boolean }
   /** Settled's "Show N more". */
@@ -26,8 +36,12 @@ export type ChatListItem<S extends ChatSummary = ChatSummary> =
   | { kind: 'clear' }
   | {
     kind: 'chat'; summary: S;
-    /** The section it is listed in, which decides its swipe and whether its row is slim. */
-    section: InboxSection;
+    /**
+     * The inbox section it is listed in, which decides its swipe and whether
+     * its row is slim; null while the list is not an inbox, where its swipe
+     * is Rename and Close as it always was.
+     */
+    section: InboxSection | null;
     /** It woke from a snooze and has not been opened since. */
     woke: boolean;
   }
@@ -81,6 +95,11 @@ export function chatFacts(summary: ChatSummary, known: Partial<RowInbox> = {}): 
 
 /** How the inbox lays out a list: its time, its setting, its shelves, each row's facts. */
 export interface InboxContext<S extends ChatSummary = ChatSummary> {
+  /**
+   * The setting `inbox`. Off, the list is grouped as it always was (Pinned,
+   * Needs you, Working, Idle) and only the pins of `facts` count.
+   */
+  enabled: boolean;
   now: number;
   hideWorking: boolean;
   shelves: ShelfState;
@@ -88,8 +107,8 @@ export interface InboxContext<S extends ChatSummary = ChatSummary> {
   facts: (summary: S, key: string) => InboxFacts;
 }
 
-/** No prefs, no tracker, nothing hidden: every chat in the inbox by its last message. */
-export const PLAIN_INBOX: InboxContext = { now: 0, hideWorking: false, shelves: DEFAULT_SHELVES, facts: (summary) => chatFacts(summary) };
+/** The inbox off, with no pins: the list grouped by what each chat is doing. */
+export const PLAIN_INBOX: InboxContext = { enabled: false, now: 0, hideWorking: false, shelves: DEFAULT_SHELVES, facts: (summary) => chatFacts(summary) };
 
 /**
  * What a workspace's card in Spaces stands for.
@@ -126,10 +145,13 @@ export function paneChats<S extends ChatSummary>(summary: S): readonly S['panes'
 }
 
 /**
- * The list's rows: the inbox (`src/lib/inbox`), Pinned first in pin order,
- * then the chats that came back to you most recently, then the Working,
- * Snoozed and Settled shelves. Each chat brings its agents' rows under it,
- * in whatever section it is in.
+ * The list's rows. As an inbox (`src/lib/inbox`, the setting on): Pinned
+ * first in pin order, then the chats that came back to you most recently,
+ * then the Working, Snoozed and Settled shelves. Otherwise as it always was:
+ * Pinned, then by live state (Needs you, Working, Idle), keeping the host's
+ * order within each group except Idle, where the chat that finished last
+ * comes first. Each chat brings its agents' rows under it, in whatever
+ * section or group it is in.
  *
  * A pinned chat stays in Pinned whatever it is doing: its row already says
  * when it needs you, and a pin that jumped away the moment the agent asked
@@ -167,6 +189,27 @@ export function groupChats<S extends ChatSummary & { host?: HostRef | null }>(
     }
     return false;
   });
+  const rowsOf = (summary: S, section: InboxSection | null, woke: boolean): ChatListItem<S>[] => [
+    { kind: 'chat', summary, section, woke },
+    ...(panesOf.get(keyOf(summary)) ?? []).map((pane, index, listed): ChatListItem<S> => ({
+      kind: 'pane', summary, pane, first: index === 0, last: index === listed.length - 1,
+    })),
+  ];
+  if (!inbox.enabled) {
+    const pinnedAt = (chat: S) => inbox.facts(chat, keyOf(chat)).pref.pinnedAt;
+    const groupOf = (chat: S): ChatGroupId =>
+      pinnedAt(chat) !== null
+        ? 'pinned'
+        : chat.status === 'blocked' ? 'needs-you' : chat.status === 'working' ? 'working' : 'idle';
+    return CHAT_GROUPS.flatMap(({ id, title }): ChatListItem<S>[] => {
+      const chats = matches.filter((chat) => groupOf(chat) === id);
+      if (id === 'pinned') chats.sort((a, b) => (pinnedAt(a) ?? 0) - (pinnedAt(b) ?? 0));
+      // The chat that finished last first, by its last message; one with none keeps its place after them.
+      if (id === 'idle') chats.sort((a, b) => (b.preview?.timestamp ?? 0) - (a.preview?.timestamp ?? 0));
+      if (chats.length === 0) return [];
+      return [{ kind: 'group', id, title, count: chats.length }, ...chats.flatMap((summary) => rowsOf(summary, null, false))];
+    });
+  }
   const layout = inboxLayout(matches, (chat) => inbox.facts(chat, keyOf(chat)), { now: inbox.now, hideWorking: inbox.hideWorking });
   return inboxEntries(layout, inbox.shelves, needle !== '').flatMap((entry): ChatListItem<S>[] => {
     switch (entry.kind) {
@@ -174,15 +217,7 @@ export function groupChats<S extends ChatSummary & { host?: HostRef | null }>(
       case 'shelf': return [{ kind: 'shelf', id: entry.id, title: SHELF_TITLES[entry.id], count: entry.count, expanded: entry.expanded }];
       case 'more': return [{ kind: 'more', count: entry.count }];
       case 'clear': return [{ kind: 'clear' }];
-      case 'row': {
-        const summary = entry.row.item;
-        return [
-          { kind: 'chat', summary, section: entry.row.section, woke: entry.row.woke },
-          ...(panesOf.get(keyOf(summary)) ?? []).map((pane, index, listed): ChatListItem<S> => ({
-            kind: 'pane', summary, pane, first: index === 0, last: index === listed.length - 1,
-          })),
-        ];
-      }
+      case 'row': return rowsOf(entry.row.item, entry.row.section, entry.row.woke);
     }
   });
 }

@@ -47,7 +47,7 @@ export function UndoNotice() {
           accessibilityLabel="Undo"
           hitSlop={spacing.sm}
           testID="undo-notice-undo"
-          style={({ pressed }) => ({ minHeight: minTouchTarget, justifyContent: 'center', paddingHorizontal: spacing.sm, opacity: pressed ? 0.6 : 1 })}>
+          style={({ pressed }) => ({ minHeight: minTouchTarget, justifyContent: 'center', paddingHorizontal: spacing.sm, opacity: pressed ? inbox.pressedOpacity : 1 })}>
           <Text variant="subhead" weight="600" color="tint">Undo</Text>
         </Pressable>
       </View>

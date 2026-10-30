@@ -28,6 +28,7 @@ function fakeClock(start = 1_000) {
 it('records when a chat leaves working, and holds it as working for the grace', () => {
   const { clock, advance, now } = fakeClock();
   const tracker = createReturnTracker(clock);
+  tracker.observe([{ key: 'a', status: 'idle' }]);
   tracker.observe([{ key: 'a', status: 'working' }]);
   expect(tracker.returnedAt('a')).toBeNull();
   expect(tracker.activeSince('a')).toBe(1_000);
@@ -46,6 +47,7 @@ it('records when a chat leaves working, and holds it as working for the grace', 
 it('lets a run that carries on within the grace stay one stretch of work', () => {
   const { clock, advance, now } = fakeClock();
   const tracker = createReturnTracker(clock);
+  tracker.observe([{ key: 'a', status: 'idle' }]);
   tracker.observe([{ key: 'a', status: 'working' }]);
   advance(1_000);
   tracker.observe([{ key: 'a', status: 'done' }]);
@@ -72,6 +74,25 @@ it('counts a chat asking when first seen as back now, and one doing anything els
   tracker.observe([{ key: 'ask', status: 'blocked' }, { key: 'idle', status: 'idle' }]);
   expect(tracker.returnedAt('ask')).toBe(1_000);
   expect(tracker.returnedAt('idle')).toBeNull();
+  expect(tracker.activeSince('idle')).toBeNull();
+});
+
+// After a relaunch, or a remount on another host, the first poll sees a
+// chat already working. When it started is unknown: the time the app looked
+// is not when anything happened, and treating it so took a chat settled
+// while it worked off the shelf on every launch.
+it('records no start for a chat already working or asking when first seen, only one seen to change', () => {
+  const { clock, advance } = fakeClock();
+  const tracker = createReturnTracker(clock);
+  tracker.observe([{ key: 'busy', status: 'working' }, { key: 'ask', status: 'blocked' }, { key: 'idle', status: 'idle' }]);
+  expect(tracker.activeSince('busy')).toBeNull();
+  expect(tracker.activeSince('ask')).toBeNull();
+  advance(5_000);
+  tracker.observe([{ key: 'busy', status: 'working' }, { key: 'ask', status: 'blocked' }, { key: 'idle', status: 'working' }]);
+  expect(tracker.activeSince('busy')).toBeNull();
+  expect(tracker.activeSince('idle')).toBe(6_000);
+  tracker.reset();
+  tracker.observe([{ key: 'idle', status: 'working' }]);
   expect(tracker.activeSince('idle')).toBeNull();
 });
 

@@ -75,7 +75,7 @@ jest.mock('../../../../modules/herdr-terminal/src', () => ({
 }));
 jest.mock('@/state/db', () => ({ loadThreadReads: async () => new Map(), setSetting: async () => undefined }));
 jest.mock('@/state/saveSetting', () => ({ saveSetting: jest.fn() }));
-const mockSettings = { listMode: 'spaces', seenSwipeHint: true, starAsked: true, activeDays: '', pollScale: 1, hideWorking: true, settleAfterDays: 0 };
+const mockSettings = { listMode: 'spaces', seenSwipeHint: true, starAsked: true, activeDays: '', pollScale: 1, inbox: false, hideWorking: true, settleAfterDays: 0 };
 jest.mock('@/state/settings', () => ({
   useSettings: Object.assign((select: (state: typeof mockSettings) => unknown) => select(mockSettings), { getState: () => mockSettings }),
   encodeBool: (value: boolean) => String(value),
@@ -99,7 +99,7 @@ jest.mock('../useChatPrefs', () => ({
     inboxPrefOf: (chat: { workspaceId: string; chatKey?: string }) => ({
       ...jest.requireActual('@/lib/inbox/inbox').NO_INBOX_PREF, ...mockInboxPrefs[chat.chatKey ?? chat.workspaceId],
     }),
-    changeInbox: async () => null, restore: async () => undefined,
+    changeInbox: async () => null, restore: async () => undefined, isLoaded: () => true, ownsInbox: () => true,
   }),
 }));
 jest.mock('../useOutdatedIntegrations', () => ({ useOutdatedIntegrations: () => ({ issues: [], updating: false, error: null, update: jest.fn() }) }));
@@ -124,6 +124,7 @@ beforeEach(() => {
   mockPinned = [];
   mockInboxPrefs = {};
   mockSettings.listMode = 'spaces';
+  mockSettings.inbox = false;
   useInboxShelves.setState({ expanded: { working: false, snoozed: false, settled: true }, settledPages: 1 });
   mockTerminalAvailable = true;
   useChatSelection.setState({ detail: null });
@@ -293,7 +294,32 @@ describe('on iPad', () => {
   });
 });
 
+// The setting off, the default: the list as it always was.
+describe('with the inbox off', () => {
+  it('groups the chats by Needs you, Working and Idle, with no shelves', async () => {
+    mockInboxPrefs = { w2: { settledAt: Date.now() - 60_000, settledReason: 'user' } };
+    const screen = await render(<ChatsList />);
+    expect(screen.getByTestId('chat-group-needs-you')).toBeOnTheScreen();
+    expect(screen.getByTestId('chat-group-working')).toBeOnTheScreen();
+    expect(screen.getByTestId('chat-group-idle')).toBeOnTheScreen();
+    // A chat settled while the setting was on is listed like any other.
+    expect(screen.getByTestId('chat-row-w2')).toHaveProp('accessibilityLabel', expect.not.stringMatching(/Woke/));
+    expect(screen.queryByTestId('inbox-shelf-settled')).toBeNull();
+    expect(screen.queryByTestId('chat-row-trailing-w2')).toBeNull();
+  });
+
+  it('offers Rename and Close to VoiceOver, and nothing of the inbox', async () => {
+    const screen = await render(<ChatsList />);
+    const names = (screen.getByTestId('chat-row-w2').props.accessibilityActions as { name: string }[]).map((action) => action.name);
+    expect(names).toEqual(expect.arrayContaining(['rename', 'close']));
+    expect(names).not.toEqual(expect.arrayContaining(['settle']));
+  });
+});
+
 describe('the inbox', () => {
+  beforeEach(() => {
+    mockSettings.inbox = true;
+  });
   // The Demo's w6:p2 is working. In Agents it is a chat of its own, which
   // waits on the Working shelf, shut, until the header is tapped.
   it('holds a working agent on a shut Working shelf, and opens it from the header', async () => {

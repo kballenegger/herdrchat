@@ -45,27 +45,11 @@ appId: dev.herdr.HerdrChat
     text: Release notes summary, Claude · demo/notes.*
 # w6's agents, each a full row titled by its session, its line naming its
 # workspace only when no folder on it does (here both folders say "api"). p2
-# is working, so it waits on the Working shelf under the inbox, shut until
-# its header is tapped; p1 is idle, in the inbox above it.
-- scrollUntilVisible:
-    element:
-      id: inbox-shelf-working
-    direction: DOWN
-    centerElement: true
-- assertVisible:
-    id: inbox-shelf-working
-    text: Working · 1
-- runFlow:
-    when:
-      notVisible:
-        id: chat-row-w6:p2
-    commands:
-      - tapOn:
-          id: inbox-shelf-working
+# is working, so it sits in Working, above w2's Idle; p1 is idle, below it.
 - scrollUntilVisible:
     element:
       id: chat-row-w6:p2
-    direction: DOWN
+    direction: UP
     centerElement: true
 - assertVisible:
     id: chat-row-w6:p2
@@ -73,7 +57,7 @@ appId: dev.herdr.HerdrChat
 - scrollUntilVisible:
     element:
       id: chat-row-w6:p1
-    direction: UP
+    direction: DOWN
     centerElement: true
 - assertVisible:
     id: chat-row-w6:p1
@@ -87,8 +71,7 @@ appId: dev.herdr.HerdrChat
 - assertNotVisible:
     id: terminal-row-w6:p3
 # The Demo's opencode (w9, "docs") has no reader: it is an agent all the same,
-# so it has a terminal row of its own here, under no card, at the end of the
-# inbox.
+# so it has a terminal row of its own here, under no card, in Idle.
 - scrollUntilVisible:
     element:
       id: terminal-row-w9:p1

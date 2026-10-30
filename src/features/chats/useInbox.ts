@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
-import { activeRead } from '@/lib/unread';
+import type { InboxPref } from '@/lib/inbox/inbox';
 import { inboxRule } from '@/lib/inbox/rules';
 import { inboxReturns, type TrackedRow } from '@/lib/inbox/returnTracker';
 import { isDemo } from '@/state/connections';
@@ -10,7 +10,8 @@ import { useSettings } from '@/state/settings';
 import { useSwipeActivity } from '@/state/swipeActivity';
 import { agentRowKey, agentRows, isAgentRow } from './agentRows';
 import { chatFacts, type InboxContext } from './chatGroups';
-import { readsOf, rowKey, type ListedChat, type ReadsByConnection } from './listedChat';
+import { rowOpenedAt } from './chatUnread';
+import { openFor, readsOf, rowKey, type ListedChat, type OpenChat, type ReadsByConnection } from './listedChat';
 import type { PrefRow, useChatPrefs } from './useChatPrefs';
 
 /**
@@ -21,14 +22,21 @@ import type { PrefRow, useChatPrefs } from './useChatPrefs';
  * Both views' rows are tracked and ruled on, whichever is showing: a chat
  * settled in Agents comes off the shelf when it starts working while Spaces
  * is up, and switching views does not make the tracker forget every row.
+ *
+ * All of it only while the setting `inbox` is on. Off, the list is grouped
+ * as it always was, and nothing is written: a chat settled or snoozed before
+ * stays so in the database, and shows so again when the setting is back on.
  */
-export function useInbox({ summaries, prefs, reads, searching }: {
+export function useInbox({ summaries, prefs, reads, open, searching }: {
   summaries: readonly ListedChat[];
   prefs: ReturnType<typeof useChatPrefs>;
   reads: ReadsByConnection;
+  /** The chat on screen beside the list (iPad): being read, so not "Woke". */
+  open: OpenChat | null;
   /** Nothing settles by itself while the list is being searched. */
   searching: boolean;
 }): InboxContext<ListedChat> {
+  const enabled = useSettings((state) => state.inbox);
   const hideWorking = useSettings((state) => state.hideWorking);
   const settleAfterDays = useSettings((state) => state.settleAfterDays);
   const expanded = useInboxShelves((state) => state.expanded);
@@ -43,15 +51,13 @@ export function useInbox({ summaries, prefs, reads, searching }: {
     inboxReturns.observe(rows.map((row): TrackedRow => ({ key: row.key, status: row.summary.status })));
   }, [rows]);
 
-  const { inboxPrefOf, changeInbox } = prefs;
+  const { inboxPrefOf, changeInbox, isLoaded, ownsInbox } = prefs;
   const facts = useCallback(
     (summary: ListedChat, key: string) => {
       const ref = summary as PrefRow;
-      const read = summary.sessionSig === null ? null
-        : activeRead(readsOf(reads, summary), ref.chatKey ?? summary.workspaceId, summary.sessionSig);
       return chatFacts(summary, {
         pref: inboxPrefOf(ref),
-        openedAt: read?.openedAt ?? null,
+        openedAt: rowOpenedAt(ref, readsOf(reads, summary), openFor(open, summary), now),
         returnedAt: inboxReturns.returnedAt(key),
         activeSince: inboxReturns.activeSince(key),
         working: inboxReturns.isWorking(key, summary.status, now),
@@ -59,39 +65,52 @@ export function useInbox({ summaries, prefs, reads, searching }: {
     },
     // `tracked` stands for the tracker's state, which `facts` reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reads, inboxPrefOf, now, tracked]
+    [reads, open, inboxPrefOf, now, tracked]
   );
 
   // The rules: a settled chat that something happened to comes off the
   // shelf, a snoozed one that asks wakes, an untouched one settles. One pass
   // at a time; each writes only what differs, so a pass after it is a no-op.
+  //
+  // Only on a host whose prefs have loaded: before that every chat reads as
+  // unpinned and unsettled, and an old pinned or snoozed one would be
+  // settled over what is stored. The write decides again on the stored pref
+  // (`changeInbox` with a function), for a load that lands in between.
+  //
+  // An agent of several is settled and snoozed with its workspace
+  // (`ownsInbox`): its card's row is the one ruled on, by the workspace's
+  // status and newest line. Ruled on by each agent, the idle one would
+  // settle the workspace while its sibling works.
   const running = useRef(false);
   useEffect(() => {
-    if (running.current) return;
+    if (!enabled || running.current) return;
     const writes = rows.flatMap((row) => {
-      if (row.summary.sessionSig === null) return [];
-      const change = inboxRule(facts(row.summary, row.key), now, {
+      const ref = row.summary as PrefRow;
+      if (row.summary.sessionSig === null || !isLoaded(row.summary.connectionId) || !ownsInbox(ref)) return [];
+      const known = facts(row.summary, row.key);
+      const options = {
         settleAfterDays,
         // The Demo's transcripts are frozen in the past: every chat in it
         // would settle on the first launch.
         allowAutoSettle: !searching && !swiping && !isDemo(row.summary.connectionId),
-      });
-      return change === null ? [] : [{ row, change }];
+      };
+      if (inboxRule(known, now, options) === null) return [];
+      return [{ ref, decide: (stored: InboxPref) => inboxRule({ ...known, pref: stored }, now, options) }];
     });
     if (writes.length === 0) return;
     running.current = true;
     void (async () => {
       try {
-        for (const { row, change } of writes) await changeInbox(row.summary as PrefRow, change);
+        for (const { ref, decide } of writes) await changeInbox(ref, decide);
       } finally {
         running.current = false;
       }
     })();
-  }, [rows, facts, now, settleAfterDays, searching, swiping, changeInbox]);
+  }, [enabled, rows, facts, now, settleAfterDays, searching, swiping, changeInbox, isLoaded, ownsInbox]);
 
   return useMemo(
-    () => ({ now, hideWorking, shelves: { expanded, settledPages }, facts }),
-    [now, hideWorking, expanded, settledPages, facts]
+    () => ({ enabled, now, hideWorking, shelves: { expanded, settledPages }, facts }),
+    [enabled, now, hideWorking, expanded, settledPages, facts]
   );
 }
 

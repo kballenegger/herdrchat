@@ -50,6 +50,16 @@ describe('listMode', () => {
 describe('the inbox', () => {
   afterEach(() => useSettings.getState().hydrate(SETTINGS_DEFAULTS));
 
+  // Off by default: the list is the one it always was until someone turns it on.
+  it('is off by default, and round-trips', () => {
+    expect(SETTINGS_DEFAULTS.inbox).toBe(false);
+    expect(useSettings.getState().inbox).toBe(false);
+    expect(decodeBool(null, SETTINGS_DEFAULTS.inbox)).toBe(false);
+    expect(decodeBool(encodeBool(true), SETTINGS_DEFAULTS.inbox)).toBe(true);
+    useSettings.getState().set('inbox', true);
+    expect(settingsSnapshot().inbox).toBe(true);
+  });
+
   // Working chats wait under the list, and untouched ones settle after three days.
   it('hides working chats and settles after three days by default', () => {
     expect(SETTINGS_DEFAULTS.hideWorking).toBe(true);

@@ -118,7 +118,7 @@ describe('an agent\'s own pin and mute', () => {
     const agentsRow = agentRows(listed)[1]!;
     expect({ ...spacesRow }).toEqual({
       connectionId: agentsRow.connectionId, workspaceId: agentsRow.workspaceId, sessionSig: agentsRow.sessionSig,
-      chatKey: agentsRow.chatKey, inherits: agentsRow.inherits,
+      chatKey: agentsRow.chatKey, inherits: agentsRow.inherits, inboxRef: agentsRow.inboxRef,
     });
     mockSaved.set(host.id, new Map([['w6/w6:p2', { ...NO_INBOX_PREF, sessionSig: 'sig-w6:p2', pinnedAt: 7, muted: true }]]));
     const { result } = await renderHook(() => useChatPrefs(db, host, listed, [host.id]));

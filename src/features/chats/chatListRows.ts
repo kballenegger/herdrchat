@@ -25,6 +25,6 @@ export function chatListRows(
   terminalAvailable: boolean
 ): ListItemWithTerminals<ListedChat>[] {
   return mode === 'agents'
-    ? withAgentTerminals(groupChats(agentRows(summaries), query, inbox, agentRowKey), summaries, query)
+    ? withAgentTerminals(groupChats(agentRows(summaries), query, inbox, agentRowKey), summaries, query, inbox.enabled)
     : withTerminalRows(groupChats(summaries, query, inbox, rowKey), terminalAvailable);
 }

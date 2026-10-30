@@ -48,12 +48,17 @@ it('calls Monday "Next week" on a Monday, with its day, and keeps one row per wa
 });
 
 it('wakes at 9 local time the next day across a DST change', () => {
-  // US clocks go back on 2026-11-01; Europe's went back on 2026-10-25.
-  for (const day of [24, 31]) {
-    const wake = new Date(localAt(local(day, 23, 30), 1, 9));
-    expect(wake.getHours()).toBe(9);
-    expect(wake.getDate()).toBe(new Date(2026, 9, day + 1).getDate());
-  }
+  // The zone really changes here, or this test proves nothing: jest runs in
+  // New York time (jest.global-setup.js), whose clocks go back on
+  // 2026-11-01, so that Sunday is 25 hours long.
+  expect(new Date(2026, 9, 31, 12).getTimezoneOffset()).not.toBe(new Date(2026, 10, 2, 12).getTimezoneOffset());
+  const wake = new Date(localAt(local(31, 23, 30), 1, 9));
+  expect(wake.getHours()).toBe(9);
+  expect(wake.getDate()).toBe(1);
+  // By the calendar, not by adding 24 hours: 9:00 to 9:00 across the change is 25.
+  expect(localAt(local(31, 9), 1, 9) - local(31, 9)).toBe(25 * 3_600_000);
+  // A day with no change, for contrast.
+  expect(localAt(local(24, 9), 1, 9) - local(24, 9)).toBe(24 * 3_600_000);
 });
 
 it('says how long until a snooze ends, rounded up', () => {

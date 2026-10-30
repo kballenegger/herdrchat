@@ -35,7 +35,9 @@ appId: dev.herdr.HerdrChat
 - tapOn:
     id: header-close
 - assertVisible:
-    id: chat-row-w1
+    id: chat-group-needs-you
+- tapOn:
+    id: chat-group-idle
 - scrollUntilVisible:
     element:
       id: chat-row-w2

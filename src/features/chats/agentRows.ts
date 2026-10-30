@@ -37,6 +37,8 @@ export interface AgentRow extends ListedChat {
   workspace: ListedChat;
   /** What also pins or mutes it, after its own pref (`agentPrefRow`). */
   inherits: readonly PrefRef[];
+  /** Where it is settled and snoozed, when not on its own pref: its workspace card's (`agentPrefRow`). */
+  inboxRef?: PrefRef;
   /**
    * Which of its workspace's agents it is (`2 of 2`), for an agent of several
    * with no title of its own. Untitled, two agents in one folder were two
@@ -104,6 +106,7 @@ export function agentPrefRow(workspace: ListedChat, pane: ListedPane): {
   sessionSig: string | null;
   chatKey: string;
   inherits: readonly PrefRef[];
+  inboxRef: PrefRef;
 } {
   return {
     connectionId: workspace.connectionId,
@@ -114,6 +117,11 @@ export function agentPrefRow(workspace: ListedChat, pane: ListedPane): {
       { key: workspace.workspaceId, sessionSig: pane.sessionSig },
       { key: workspace.workspaceId, sessionSig: workspace.sessionSig },
     ],
+    // Settled and snoozed with its workspace: Spaces lists it under its
+    // workspace's card, which is in one section of the inbox, so an agent
+    // settled on its own would still be listed there. Filed on the card's
+    // pref, a settle or snooze reads the same from either view.
+    inboxRef: { key: workspace.workspaceId, sessionSig: workspace.sessionSig },
   };
 }
 

@@ -1,5 +1,5 @@
 import { DEFAULT_SHELVES, NO_INBOX_PREF } from '@/lib/inbox/inbox';
-import { chatFacts, groupChats, paneChats, spaceCardMode, type InboxContext } from '../chatGroups';
+import { PLAIN_INBOX, chatFacts, groupChats, paneChats, spaceCardMode, type InboxContext } from '../chatGroups';
 import type { TerminalPane } from '@/lib/terminal/rows';
 import type { AgentInfo, Pane } from '@/lib/herdr/models';
 import type { ChatSummary, PaneSummary } from '../useWorkspaces';
@@ -7,13 +7,18 @@ import type { ChatSummary, PaneSummary } from '../useWorkspaces';
 const chat = (workspaceId: string, status: ChatSummary['status']): ChatSummary => ({
   workspaceId, title: workspaceId, status, number: 1, agents: [], panes: [], preview: null, sessionSig: null, shellPanes: [], tabs: [], layouts: [], activeTabId: null, tabCount: 0, paneCount: 0, restoreError: null, sessionTitle: null, agentName: null,
 });
+const chats = [chat('idle-a', 'idle'), chat('busy', 'working'), chat('approval', 'blocked'), chat('idle-b', 'done'), chat('unknown', 'unknown')];
 const ids = (rows: ReturnType<typeof groupChats>) => rows.map((row) =>
   row.kind === 'chat' ? row.summary.workspaceId : row.kind === 'pane' ? `pane:${row.pane.paneId}` : row.kind === 'tab' ? `tab:${row.tabId}`
     : row.kind === 'group' || row.kind === 'shelf' ? row.id : row.kind);
-/** The inbox with pins (by row key) and the Working shelf as a test asks. */
-function inboxOf<S extends ChatSummary>({ pinned = new Map(), hideWorking = false }: { pinned?: ReadonlyMap<string, number>; hideWorking?: boolean } = {}): InboxContext<S> {
+/** Pins by row key, with the list grouped as it always was (the setting `inbox` off, the default). */
+function pins<S extends ChatSummary>(pinned: ReadonlyMap<string, number>): InboxContext<S> {
+  return { ...(PLAIN_INBOX as unknown as InboxContext<S>), facts: (summary, key) => chatFacts(summary, { pref: { ...NO_INBOX_PREF, pinnedAt: pinned.get(key) ?? null } }) };
+}
+/** The list as an inbox, with pins (by row key) and the Working shelf as a test asks. */
+function inboxOf<S extends ChatSummary>({ pinned = new Map<string, number>(), hideWorking = false }: { pinned?: ReadonlyMap<string, number>; hideWorking?: boolean } = {}): InboxContext<S> {
   return {
-    now: 0, hideWorking, shelves: DEFAULT_SHELVES,
+    enabled: true, now: 0, hideWorking, shelves: DEFAULT_SHELVES,
     facts: (summary, key) => chatFacts(summary, { pref: { ...NO_INBOX_PREF, pinnedAt: pinned.get(key) ?? null } }),
   };
 }
@@ -26,24 +31,14 @@ const paneOf = (agent: AgentInfo): PaneSummary => ({ paneId: agent.paneId, agent
 const withAgents = (summary: ChatSummary, agents: AgentInfo[]): ChatSummary => ({
   ...summary, agents, panes: agents.filter((agent) => agent.agent !== null).map(paneOf),
 });
-// `busy` is a chat with its one agent: only a chat waits on the Working shelf.
-const chats = [
-  chat('idle-a', 'idle'), withAgents(chat('busy', 'working'), [agentIn('busy', 'busy:p1', 'claude', '/b')]),
-  chat('approval', 'blocked'), chat('idle-b', 'done'), chat('unknown', 'unknown'),
-];
 
-it('lists every chat in the inbox, in the host\'s order among equals, chats without an agent too', () => {
-  expect(ids(groupChats(chats, ''))).toEqual(['idle-a', 'busy', 'approval', 'idle-b', 'unknown']);
+it('prioritizes live state, preserves order and includes chats without an agent', () => {
+  expect(ids(groupChats(chats, ''))).toEqual(['needs-you', 'approval', 'working', 'busy', 'idle', 'idle-a', 'idle-b', 'unknown']);
+  expect(ids(groupChats([chat('busy', 'blocked')], ''))).toEqual(['needs-you', 'busy']);
 });
 
-it('holds a working chat on a shut Working shelf when the setting is on', () => {
-  const rows = groupChats(chats, '', inboxOf({ hideWorking: true }));
-  expect(ids(rows)).toEqual(['idle-a', 'approval', 'idle-b', 'unknown', 'working']);
-  expect(rows.at(-1)).toMatchObject({ kind: 'shelf', title: 'Working', count: 1, expanded: false });
-});
-
-it('lists every match, including after clearing a search', () => {
-  expect(ids(groupChats(chats, '  IDLE-b '))).toEqual(['idle-b']);
+it('keeps every group open, including after clearing a search', () => {
+  expect(ids(groupChats(chats, '  IDLE-b '))).toEqual(['idle', 'idle-b']);
   expect(groupChats(chats, 'missing')).toEqual([]);
   expect(groupChats([], '')).toEqual([]);
   expect(groupChats(chats, '').filter(row => row.kind === 'chat')).toHaveLength(chats.length);
@@ -55,14 +50,14 @@ it('matches a folder or provider without requiring a transcript or session id', 
     agent: 'codex', agentStatus: 'idle', cwd: '/work/Acme/API', foregroundCwd: null,
     focused: true, paneId: 'p1', tabId: 't1', terminalId: null, workspaceId: 'Release', agentSession: null, stateChangeSeq: null, completionSeq: null, inputPending: false, name: null, title: null,
   }];
-  expect(ids(groupChats([workspace], 'acme/api'))).toEqual(['Release']);
-  expect(ids(groupChats([workspace], 'CODEX'))).toEqual(['Release']);
+  expect(ids(groupChats([workspace], 'acme/api'))).toEqual(['idle', 'Release']);
+  expect(ids(groupChats([workspace], 'CODEX'))).toEqual(['idle', 'Release']);
 });
 
 it('puts pinned chats first, in pin order, whatever they are doing', () => {
-  const pinned = inboxOf({ pinned: new Map([['idle-b', 20], ['approval', 10]]), hideWorking: true });
+  const pinned = pins(new Map([['idle-b', 20], ['approval', 10]]));
   expect(ids(groupChats(chats, '', pinned))).toEqual([
-    'pinned', 'approval', 'idle-b', 'idle-a', 'unknown', 'working',
+    'pinned', 'approval', 'idle-b', 'working', 'busy', 'idle', 'idle-a', 'unknown',
   ]);
   expect(ids(groupChats(chats, 'idle-b', pinned))).toEqual(['pinned', 'idle-b']);
 });
@@ -76,10 +71,9 @@ it('lists each agent under a workspace that holds two or more of them', () => {
     agentIn('api', 'api:p3', null, '/home/demo/api'),
   ]);
   const solo = withAgents(chat('solo', 'idle'), [agentIn('solo', 'solo:p1', 'claude', '/home/demo/solo')]);
-  expect(ids(groupChats([api, solo], ''))).toEqual(['api', 'pane:api:p1', 'pane:api:p2', 'solo']);
-  // A space card stands for its workspace: it never hides on the Working
-  // shelf, which would take its idle agent and its terminals with it.
-  expect(ids(groupChats([api, solo], '', inboxOf({ hideWorking: true })))).toEqual(['api', 'pane:api:p1', 'pane:api:p2', 'solo']);
+  expect(ids(groupChats([api, solo], ''))).toEqual(['working', 'api', 'pane:api:p1', 'pane:api:p2', 'idle', 'solo']);
+  // The group counts chats, not the agents under them.
+  expect(groupChats([api, solo], '')[0]).toMatchObject({ kind: 'group', count: 1 });
 });
 
 it('finds an agent row by its folder or provider, and every agent by the workspace name', () => {
@@ -87,9 +81,9 @@ it('finds an agent row by its folder or provider, and every agent by the workspa
     agentIn('api', 'api:p1', 'claude', '/home/demo/api'),
     agentIn('api', 'api:p2', 'codex', '/home/demo/api/web'),
   ]);
-  expect(ids(groupChats([api], 'api/web'))).toEqual(['api', 'pane:api:p2']);
-  expect(ids(groupChats([api], 'CODEX'))).toEqual(['api', 'pane:api:p2']);
-  expect(ids(groupChats([api], 'api'))).toEqual(['api', 'pane:api:p1', 'pane:api:p2']);
+  expect(ids(groupChats([api], 'api/web'))).toEqual(['idle', 'api', 'pane:api:p2']);
+  expect(ids(groupChats([api], 'CODEX'))).toEqual(['idle', 'api', 'pane:api:p2']);
+  expect(ids(groupChats([api], 'api'))).toEqual(['idle', 'api', 'pane:api:p1', 'pane:api:p2']);
   expect(groupChats([api], 'missing')).toEqual([]);
 });
 
@@ -100,8 +94,8 @@ it('finds an agent by the name its row shows, not only herdr\'s id for it', () =
     agentIn('wJ', 'wJ:p1', 'agy', '/Users/me/GitHub'),
     agentIn('wJ', 'wJ:p2', 'grok', '/Users/me/GitHub'),
   ]);
-  expect(ids(groupChats([space], 'antigravity'))).toEqual(['wJ', 'pane:wJ:p1']);
-  expect(ids(groupChats([space], 'agy'))).toEqual(['wJ', 'pane:wJ:p1']);
+  expect(ids(groupChats([space], 'antigravity'))).toEqual(['idle', 'wJ', 'pane:wJ:p1']);
+  expect(ids(groupChats([space], 'agy'))).toEqual(['idle', 'wJ', 'pane:wJ:p1']);
 });
 
 it('keeps an agent row under its workspace when the workspace is pinned', () => {
@@ -109,7 +103,7 @@ it('keeps an agent row under its workspace when the workspace is pinned', () => 
     agentIn('api', 'api:p1', 'claude', '/a'),
     agentIn('api', 'api:p2', 'omp', '/b'),
   ]);
-  expect(ids(groupChats([api], '', inboxOf({ pinned: new Map([['api', 1]]) })))).toEqual(['pinned', 'api', 'pane:api:p1', 'pane:api:p2']);
+  expect(ids(groupChats([api], '', pins(new Map([['api', 1]]))))).toEqual(['pinned', 'api', 'pane:api:p1', 'pane:api:p2']);
 });
 
 // A search that lists only some agents still has to end the rail at the last
@@ -138,8 +132,8 @@ it('finds a chat, and an agent row, by its session title', () => {
   ]);
   const panes = api.panes.map((pane) => ({ ...pane, sessionTitle: pane.agent.title }));
   const solo = withAgents(chat('solo', 'idle'), [titled(agentIn('solo', 'solo:p1', 'claude', '/home/demo/solo'), 'Parser refactor')]);
-  expect(ids(groupChats([{ ...api, panes }, solo], 'web build'))).toEqual(['api', 'pane:api:p2']);
-  expect(ids(groupChats([{ ...api, panes }, solo], 'PARSER'))).toEqual(['solo']);
+  expect(ids(groupChats([{ ...api, panes }, solo], 'web build'))).toEqual(['idle', 'api', 'pane:api:p2']);
+  expect(ids(groupChats([{ ...api, panes }, solo], 'PARSER'))).toEqual(['idle', 'solo']);
 });
 
 // Every host's workspaces are numbered from w1, so in a list of several a
@@ -153,11 +147,11 @@ describe('chats on several hosts', () => {
   const host = onHost(chat('w1', 'idle'), null);
   const nuku = onHost({ ...chat('w1', 'idle'), title: 'kenneth-bot' }, 'nuku');
 
-  it('lists another host\'s chat like any other, and keeps a pin to its own row', () => {
-    expect(groupChats([host, nuku], '', inboxOf(), key).filter((row) => row.kind === 'chat')).toHaveLength(2);
-    const pinned = groupChats([host, nuku], '', inboxOf({ pinned: new Map([[key(nuku), 1]]) }), key);
+  it('groups another host\'s chat like any other, and keeps a pin to its own row', () => {
+    expect(groupChats([host, nuku], '', pins(new Map()), key).filter((row) => row.kind === 'chat')).toHaveLength(2);
+    const pinned = groupChats([host, nuku], '', pins(new Map([[key(nuku), 1]])), key);
     expect(pinned.map((row) => (row.kind === 'chat' ? row.summary.connectionId : row.kind === 'group' ? row.id : ''))).toEqual([
-      'pinned', 'nuku', 'demo',
+      'pinned', 'nuku', 'idle', 'demo',
     ]);
   });
 
@@ -166,7 +160,7 @@ describe('chats on several hosts', () => {
       agentIn('w2', 'w2:p1', 'claude', '/srv/api'),
       agentIn('w2', 'w2:p2', 'codex', '/srv/web'),
     ]), 'nuku');
-    expect(ids(groupChats([host, nuku, multi], 'NUKU', inboxOf(), key))).toEqual(['w1', 'w2', 'pane:w2:p1', 'pane:w2:p2']);
+    expect(ids(groupChats([host, nuku, multi], 'NUKU', pins(new Map()), key))).toEqual(['idle', 'w1', 'w2', 'pane:w2:p1', 'pane:w2:p2']);
   });
 
   it('lists the agents under each of two rows that share a workspace id', () => {
@@ -176,8 +170,8 @@ describe('chats on several hosts', () => {
     ];
     const onSelected = onHost(withAgents(chat('w2', 'idle'), agents('host')), null);
     const onNuku = onHost(withAgents(chat('w2', 'idle'), agents('nuku')), 'nuku');
-    expect(ids(groupChats([onSelected, onNuku], '', inboxOf(), key))).toEqual([
-      'w2', 'pane:host:p1', 'pane:host:p2', 'w2', 'pane:nuku:p1', 'pane:nuku:p2',
+    expect(ids(groupChats([onSelected, onNuku], '', pins(new Map()), key))).toEqual([
+      'idle', 'w2', 'pane:host:p1', 'pane:host:p2', 'w2', 'pane:nuku:p1', 'pane:nuku:p2',
     ]);
   });
 });
@@ -218,11 +212,11 @@ describe('space cards', () => {
     expect(paneChats(withShell).map((pane) => pane.paneId)).toEqual(['term:p1']);
     expect(paneChats(two).map((pane) => pane.paneId)).toEqual(['api:p1', 'api:p2']);
     expect(paneChats(shellOnly)).toEqual([]);
-    expect(ids(groupChats([withShell, one], ''))).toEqual(['term', 'pane:term:p1', 'solo']);
+    expect(ids(groupChats([withShell, one], ''))).toEqual(['idle', 'term', 'pane:term:p1', 'solo']);
   });
 
   it("still narrows a space's agent rows by a search", () => {
-    expect(ids(groupChats([two], 'codex'))).toEqual(['api', 'pane:api:p2']);
+    expect(ids(groupChats([two], 'codex'))).toEqual(['idle', 'api', 'pane:api:p2']);
   });
 });
 
@@ -234,4 +228,46 @@ it('lists the idle chat that finished last first, and the ones with no message a
   const items = groupChats([at('w1', 100), at('w2', null), at('w3', 300), chat('w4', 'done'), at('w5', 200)], '');
   expect(items.filter((item) => item.kind === 'chat').map((item) => item.kind === 'chat' ? item.summary.workspaceId : ''))
     .toEqual(['w3', 'w5', 'w1', 'w2', 'w4']);
+});
+
+// The setting `inbox` on (`src/lib/inbox`): one function lays out both, so
+// both views and the iPad sidebar follow it.
+describe('as an inbox', () => {
+  // `busy` is a chat with its one agent: only a chat waits on the Working shelf.
+  const inboxChats = [
+    chat('idle-a', 'idle'), withAgents(chat('busy', 'working'), [agentIn('busy', 'busy:p1', 'claude', '/b')]),
+    chat('approval', 'blocked'), chat('idle-b', 'done'), chat('unknown', 'unknown'),
+  ];
+
+  it('lists every chat in the inbox with no group headers, in the host\'s order among equals', () => {
+    expect(ids(groupChats(inboxChats, '', inboxOf()))).toEqual(['idle-a', 'busy', 'approval', 'idle-b', 'unknown']);
+    expect(groupChats(inboxChats, '', inboxOf()).every((row) => row.kind !== 'chat' || row.section === 'inbox')).toBe(true);
+  });
+
+  it('holds a working chat on a shut Working shelf when the setting is on', () => {
+    const rows = groupChats(inboxChats, '', inboxOf({ hideWorking: true }));
+    expect(ids(rows)).toEqual(['idle-a', 'approval', 'idle-b', 'unknown', 'working']);
+    expect(rows.at(-1)).toMatchObject({ kind: 'shelf', title: 'Working', count: 1, expanded: false });
+  });
+
+  it('puts pinned chats first, in pin order, whatever they are doing', () => {
+    const pinned = inboxOf({ pinned: new Map([['idle-b', 20], ['approval', 10]]), hideWorking: true });
+    expect(ids(groupChats(inboxChats, '', pinned))).toEqual(['pinned', 'approval', 'idle-b', 'idle-a', 'unknown', 'working']);
+    expect(ids(groupChats(inboxChats, 'idle-b', pinned))).toEqual(['pinned', 'idle-b']);
+  });
+
+  // A space card stands for its workspace: it never hides on the Working
+  // shelf, which would take its idle agent and its terminals with it.
+  it('keeps a working space card in the inbox, with its agents under it', () => {
+    const api = withAgents(chat('api', 'working'), [agentIn('api', 'api:p1', 'claude', '/a'), agentIn('api', 'api:p2', 'codex', '/b')]);
+    expect(ids(groupChats([api], '', inboxOf({ hideWorking: true })))).toEqual(['api', 'pane:api:p1', 'pane:api:p2']);
+  });
+});
+
+// Off, which is the default, every chat row says it is in no inbox section:
+// that is what gives it Rename and Close on its swipe and no Woke mark.
+it('marks no row with an inbox section while the list is not an inbox', () => {
+  const rows = groupChats(chats, '');
+  expect(rows.filter((row) => row.kind === 'chat').every((row) => row.kind === 'chat' && row.section === null && !row.woke)).toBe(true);
+  expect(rows.some((row) => row.kind === 'shelf' || row.kind === 'clear' || row.kind === 'more')).toBe(false);
 });

@@ -165,7 +165,7 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
     ? null : `${terminalConnectionId}\n${terminalPaneId}`;
   const reads = useListReads(db, connectionIds.join('\n'), open, refresh);
   // The inbox: each row's section and order, and the rules that move them.
-  const inbox = useInbox({ summaries, prefs, reads, searching: query.trim() !== '' });
+  const inbox = useInbox({ summaries, prefs, reads, open, searching: query.trim() !== '' });
   const inboxActions = useInboxActions(prefs);
   const rows = useMemo(
     () => chatListRows(listMode, summaries, query, inbox, isTerminalAvailable),

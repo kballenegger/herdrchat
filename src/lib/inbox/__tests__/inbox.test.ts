@@ -55,11 +55,15 @@ it('puts a chat that just started asking at the top', () => {
   expect(ids(layout).inbox).toEqual(['asking', 'recent']);
 });
 
+// Settling and snoozing unpin (`changeInbox` with `unpin`, tested in
+// useChatPrefs.inbox.test.ts), and the rules never settle a pinned chat
+// (autoSettle.test.ts): a pinned chat is neither. What is left to the layout
+// is that a pin does not move by itself, whatever the chat does.
 it('keeps pinned chats in pin order, and never moves one by itself', () => {
   const layout = layoutOf([
     chat('b', { pref: { pinnedAt: 20 }, status: 'working', working: true }),
-    chat('a', { pref: { pinnedAt: 10, settledAt: NOW - HOUR } }),
-    chat('c', { pref: { pinnedAt: 30, snoozedUntil: NOW + HOUR, snoozedAt: NOW - HOUR } }),
+    chat('a', { pref: { pinnedAt: 10 }, status: 'blocked', returnedAt: NOW }),
+    chat('c', { pref: { pinnedAt: 30 }, preview: at(NOW - 30 * 24 * HOUR) }),
   ]);
   expect(ids(layout)).toEqual({ pinned: ['a', 'b', 'c'], inbox: [], working: [], snoozed: [], settled: [] });
 });
@@ -134,6 +138,10 @@ describe('settled', () => {
     expect(isSettled(chat('x', { status: 'blocked', activeSince: NOW - 60_000, pref }).facts)).toBe(false);
     // Already working when it was settled: it stays until something new happens.
     expect(isSettled(chat('x', { status: 'working', activeSince: NOW - 2 * HOUR, pref }).facts)).toBe(true);
+    // Seen working with no start the app saw (the first poll after a
+    // relaunch, `activeSince` null): nothing is known to have happened.
+    expect(isSettled(chat('x', { status: 'working', activeSince: null, pref }).facts)).toBe(true);
+    expect(isSettled(chat('x', { status: 'blocked', activeSince: null, pref }).facts)).toBe(true);
   });
 
   it('comes off the shelf when the agent writes after it was settled, and not for your own message', () => {

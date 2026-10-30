@@ -54,6 +54,7 @@ export function Hydrate({ children }: { children: ReactNode }) {
         activeDays,
         useHostThemes,
         listMode,
+        inbox,
         hideWorking,
         settleAfterDays,
       ] =
@@ -73,6 +74,7 @@ export function Hydrate({ children }: { children: ReactNode }) {
           getSetting(db, 'activeDays'),
           getSetting(db, 'useHostThemes'),
           getSetting(db, 'listMode'),
+          getSetting(db, 'inbox'),
           getSetting(db, 'hideWorking'),
           getSetting(db, 'settleAfterDays'),
           // Before the connections land, so the selected host opens in its
@@ -97,6 +99,7 @@ export function Hydrate({ children }: { children: ReactNode }) {
         activeDays: activeDays ?? SETTINGS_DEFAULTS.activeDays,
         useHostThemes: decodeBool(useHostThemes, SETTINGS_DEFAULTS.useHostThemes),
         listMode: decodeListMode(listMode),
+        inbox: decodeBool(inbox, SETTINGS_DEFAULTS.inbox),
         hideWorking: decodeBool(hideWorking, SETTINGS_DEFAULTS.hideWorking),
         settleAfterDays: decodeSettleAfterDays(settleAfterDays),
       });

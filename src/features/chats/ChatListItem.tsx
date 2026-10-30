@@ -66,8 +66,8 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
       accessibilityRole="header"
       accessibilityLabel={`${row.title}, ${row.count} chats`}
       style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: minTouchTarget, paddingVertical: spacing.sm }}>
-      <Text variant="caption" mono color="secondary">{row.title.toUpperCase()}</Text>
-      <View style={{ height: 1, flex: 1, backgroundColor: colors.separator }} />
+      <Text variant="caption" mono color={row.id === 'needs-you' ? 'attention' : 'secondary'}>{row.title.toUpperCase()}</Text>
+      <View style={{ height: 1, flex: 1, backgroundColor: row.id === 'needs-you' ? colors.attentionBorder : colors.separator }} />
       <Text variant="caption" mono color="secondary">{row.count}</Text>
     </View>
   );
@@ -157,10 +157,18 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
   // chat (`spaceCardMode`) shows its layout, and is never the
   // selection: the agent rows under it are.
   const space = agent === null && spaceCardMode(item) === 'space';
+  // Null while the list is not an inbox (the setting off): the row, its
+  // swipe (Rename and Close), its menu and its VoiceOver actions are as they
+  // always were.
   const section = row.section;
+  const rename = () => actions.renameChat(item);
+  const close = () => actions.closeChat(item);
   const pref = prefs.inboxPrefOf(item);
-  const target = { row: item, title: space ? spaceTitle(item) : rowTitle(item) };
-  const choices = personal ? inboxChoices(section, item.status, target, inbox) : null;
+  // An agent of several is settled with its workspace (`inboxRef`), whose
+  // newest line is what the settle has to be newer than.
+  const settles = agent?.pane != null ? agent.workspace : item;
+  const target = { row: item, title: space ? spaceTitle(item) : rowTitle(item), preview: settles.preview };
+  const choices = personal && section !== null ? inboxChoices(section, item.status, target, inbox) : null;
   const slim = section === 'snoozed' || section === 'settled';
   const trailingLabel = section === 'snoozed' && pref.snoozedUntil !== null ? wakeLabel(pref.snoozedUntil, now)
     : section === 'settled' && pref.settledAt !== null ? formatListTime(pref.settledAt) : undefined;
@@ -177,8 +185,8 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
     ...(personal ? [{ name: 'pin', label: pinned ? 'Unpin' : 'Pin', run: () => prefs.togglePin(item) }] : []),
     ...(mutable ? [{ name: 'mute', label: muted ? 'Unmute notifications' : 'Mute notifications', run: () => prefs.toggleMute(item) }] : []),
     ...(choices === null ? [] : choices.actions),
-    { name: 'rename', label: 'Rename workspace', run: () => actions.renameChat(item) },
-    { name: 'close', label: 'Close chat', run: () => actions.closeChat(item) },
+    { name: 'rename', label: 'Rename workspace', run: rename },
+    { name: 'close', label: 'Close chat', run: close },
   ];
   return (
     <SwipeableChatRow
@@ -197,7 +205,7 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
       }}
       onLongPress={() => actions.manageChat(item, menu)}
       onSwiped={onSwiped}
-      trailing={choices?.swipe}
+      trailing={section === null ? renameCloseSwipe(rename, close) : choices?.swipe}
       actions={rowActions}
       variant={slim ? 'slim' : 'card'}
       trailingLabel={trailingLabel}
@@ -226,7 +234,7 @@ function inboxChoices(
   if (section === 'settled') {
     const run = () => inbox.unsettle(target);
     return {
-      swipe: { primary: { id: 'unsettle', label: 'Unsettle', symbol: 'arrow.uturn.backward', run } },
+      swipe: { primary: { id: 'unsettle', label: 'Unsettle', symbol: 'arrow.uturn.backward', tone: 'tint', run }, full: true },
       menu: [{ label: 'Unsettle', onPress: run }],
       actions: [{ name: 'unsettle', label: 'Unsettle', run }],
     };
@@ -234,7 +242,7 @@ function inboxChoices(
   if (section === 'snoozed') {
     const run = () => inbox.wake(target);
     return {
-      swipe: { primary: { id: 'wake', label: 'Wake', symbol: 'alarm', run } },
+      swipe: { primary: { id: 'wake', label: 'Wake', symbol: 'alarm', tone: 'tint', run }, full: true },
       menu: [{ label: 'Wake', onPress: run }],
       actions: [{ name: 'wake', label: 'Wake', run }],
     };
@@ -244,10 +252,23 @@ function inboxChoices(
   const snoozable = canSnooze(status);
   return {
     swipe: {
-      primary: { id: 'settle', label: 'Settle', symbol: 'checkmark.circle', run: settle },
-      secondary: snoozable ? { id: 'snooze', label: 'Snooze', symbol: 'clock', run: snooze } : undefined,
+      primary: { id: 'settle', label: 'Settle', symbol: 'checkmark.circle', tone: 'tint', run: settle },
+      secondary: snoozable ? { id: 'snooze', label: 'Snooze', symbol: 'clock', tone: 'neutral', run: snooze } : undefined,
+      full: true,
     },
     menu: [{ label: 'Settle', onPress: settle }, ...(snoozable ? [{ label: 'Snooze…', onPress: snooze }] : [])],
     actions: [{ name: 'settle', label: 'Settle', run: settle }, ...(snoozable ? [{ name: 'snooze', label: 'Snooze', run: snooze }] : [])],
+  };
+}
+
+/** Rename and Close, the trailing swipe while the list is not an inbox. */
+function renameCloseSwipe(onRename: () => void, onClose: () => void): TrailingSwipe {
+  return {
+    // "Workspace" under the pencil, not "Rename": a row titled by its
+    // session no longer shows the workspace label this renames, and
+    // "Rename workspace" does not fit the panel. VoiceOver hears it whole.
+    secondary: { id: 'rename', label: 'Workspace', accessibilityLabel: 'Rename workspace', symbol: 'pencil', tone: 'neutral', run: onRename },
+    primary: { id: 'close', label: 'Close', symbol: 'xmark', tone: 'destructive', run: onClose },
+    full: false,
   };
 }

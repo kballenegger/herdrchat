@@ -9,12 +9,17 @@
 appId: dev.herdr.HerdrChat
 ---
 - runFlow: _start.yaml
-# p2 is working, but the workspace's card stays in the inbox with both agents
-# below it: a space card never waits on the Working shelf, since its idle
-# agent and its terminals would hide with it. The card is brought to the
-# middle, where it and both agents' rows are on screen together.
-- assertNotVisible:
-    id: inbox-shelf-working
+# p2 is working, so the workspace sits under Working with both agents below it.
+# Checked at the top of the list, before any scroll: the card's tab groups and
+# terminal rows make it tall enough that scrolling p2 to the middle took the
+# Working header off the screen. Then the card is brought to the middle, where
+# it and both agents' rows are on screen together.
+- assertVisible:
+    id: chat-group-working
+- assertVisible:
+    id: chat-row-w6
+    below:
+      id: chat-group-working
 - scrollUntilVisible:
     element:
       id: chat-row-w6

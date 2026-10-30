@@ -26,7 +26,10 @@ interface RowState {
   graceUntil: number | null;
   /** When it last came back: left working, or started asking. */
   returnedAt: number | null;
-  /** When it last started working or asking. */
+  /**
+   * When it was seen to start working or asking; null when it has not been
+   * seen to (it was already doing so when first seen, or never has).
+   */
   activeSince: number | null;
 }
 
@@ -35,7 +38,11 @@ export interface ReturnTracker {
   observe: (rows: readonly TrackedRow[], now?: number) => void;
   /** When the row last came back to you, as seen by this app. */
   returnedAt: (key: string) => number | null;
-  /** When the row last started working or asking, as seen by this app. */
+  /**
+   * When the row was seen to start working or asking: a change between two
+   * polls. Null for a row already working or asking when first seen, whose
+   * start this app did not see.
+   */
   activeSince: (key: string) => number | null;
   /**
    * Whether the row counts as working: its status says so, or it stopped less
@@ -64,6 +71,13 @@ const defaultClock: TrackerClock = {
  * already asking when first seen came back then too: it needs you now. One
  * first seen doing anything else has no return of its own, and is ordered by
  * its last message.
+ *
+ * When a chat started working or asking (`activeSince`) is only what was seen
+ * change between two polls. A row first seen working or asking (the app was
+ * just launched, the list remounted on another host) has no start: the time
+ * it was first seen is when the app looked, not when anything happened. A
+ * chat settled while it worked would otherwise come off the shelf on every
+ * launch, its "start" always newer than its settle.
  *
  * Module-level (`inboxReturns`), keyed by connection and row, so placement
  * survives the list unmounting under a pushed screen.
@@ -107,8 +121,7 @@ export function createReturnTracker(clock: TrackerClock = defaultClock): ReturnT
         present.add(key);
         const previous = states.get(key);
         if (previous === undefined) {
-          const active = status === 'working' || status === 'blocked';
-          states.set(key, { status, graceUntil: null, returnedAt: status === 'blocked' ? now : null, activeSince: active ? now : null });
+          states.set(key, { status, graceUntil: null, returnedAt: status === 'blocked' ? now : null, activeSince: null });
           changed = true;
           continue;
         }

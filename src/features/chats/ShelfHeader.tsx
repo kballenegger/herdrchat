@@ -4,7 +4,7 @@ import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import type { ShelfId } from '@/lib/inbox/inbox';
 import { useTheme } from '@/theme/ThemeProvider';
-import { minTouchTarget, size, spacing } from '@/theme/tokens';
+import { inbox, minTouchTarget, size, spacing } from '@/theme/tokens';
 
 /**
  * A shelf's header under the inbox: "Working · 2", with a chevron that says
@@ -30,7 +30,7 @@ export function ShelfHeader({ id, title, count, expanded, onPress }: {
       testID={`inbox-shelf-${id}`}
       style={({ pressed }) => ({
         flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-        minHeight: minTouchTarget, paddingVertical: spacing.sm, opacity: pressed ? 0.6 : 1,
+        minHeight: minTouchTarget, paddingVertical: spacing.sm, opacity: pressed ? inbox.pressedOpacity : 1,
       })}>
       <Icon
         name={expanded ? 'chevron.down' : 'chevron.right'}
@@ -52,7 +52,7 @@ export function ShowMoreRow({ count, onPress }: { count: number; onPress: () => 
       accessibilityRole="button"
       accessibilityLabel={`Show ${count} more`}
       testID="inbox-settled-more"
-      style={({ pressed }) => ({ minHeight: minTouchTarget, justifyContent: 'center', alignItems: 'center', opacity: pressed ? 0.6 : 1 })}>
+      style={({ pressed }) => ({ minHeight: minTouchTarget, justifyContent: 'center', alignItems: 'center', opacity: pressed ? inbox.pressedOpacity : 1 })}>
       <Text variant="footnote" color="tint">Show {count} more</Text>
     </Pressable>
   );

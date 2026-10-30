@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 
 import { showActionSheet } from '@/components/ActionSheet';
 import { haptics } from '@/components/haptics';
+import { stampAt } from '@/lib/inbox/rules';
 import { snoozePresets, whenLabel } from '@/lib/inbox/snooze';
 import { useCustomSnooze } from '@/state/customSnooze';
 import { useUndoNotice } from '@/state/undoNotice';
@@ -12,6 +13,13 @@ import type { PrefRow, PrefSnapshot, useChatPrefs } from './useChatPrefs';
 export interface InboxTarget {
   row: PrefRow;
   title: string;
+  /**
+   * The last message of what is settled or snoozed (for an agent of several,
+   * its workspace's), by the host's clock: a choice is stamped no earlier
+   * than it (`stampAt`), so a host clock ahead of the phone's does not undo
+   * it at once.
+   */
+  preview: { timestamp: number | null } | null;
 }
 
 /**
@@ -43,27 +51,27 @@ export function useInboxActions(prefs: ReturnType<typeof useChatPrefs>): {
   );
 
   const settle = useCallback(
-    ({ row }: InboxTarget) => {
+    ({ row, preview }: InboxTarget) => {
       haptics.selection();
-      void changeInbox(row, { settledAt: Date.now(), settledReason: 'user', snoozedUntil: null, snoozedAt: null }, { unpin: true })
+      void changeInbox(row, { settledAt: stampAt(Date.now(), preview), settledReason: 'user', snoozedUntil: null, snoozedAt: null }, { unpin: true })
         .then((snapshot) => offerUndo('Settled', snapshot));
     },
     [changeInbox, offerUndo]
   );
 
   const unsettle = useCallback(
-    ({ row }: InboxTarget) => {
+    ({ row, preview }: InboxTarget) => {
       haptics.selection();
-      void changeInbox(row, { settledAt: null, settledReason: null, unsettledAt: Date.now() });
+      void changeInbox(row, { settledAt: null, settledReason: null, unsettledAt: stampAt(Date.now(), preview) });
     },
     [changeInbox]
   );
 
   const snoozeUntil = useCallback(
-    ({ row }: InboxTarget, until: number) => {
+    ({ row, preview }: InboxTarget, until: number) => {
       haptics.selection();
       const now = Date.now();
-      void changeInbox(row, { snoozedUntil: until, snoozedAt: now, settledAt: null, settledReason: null }, { unpin: true })
+      void changeInbox(row, { snoozedUntil: until, snoozedAt: stampAt(now, preview), settledAt: null, settledReason: null }, { unpin: true })
         .then((snapshot) => offerUndo(`Snoozed until ${whenLabel(until, now, false)}`, snapshot));
     },
     [changeInbox, offerUndo]

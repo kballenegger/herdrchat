@@ -1,24 +1,50 @@
 # The chats list as an inbox (src/lib/inbox), the way T3 Code's sidebar
-# works: working chats wait on a Working shelf and come back to the top when
-# they finish; Settle moves a chat to Settled (with an Undo), Unsettle brings
-# it back; Snooze hides it on Snoozed, Wake brings it back marked "Woke"
-# until it is opened. Then Settings → Inbox → "Hide chats while they work"
-# off leaves a working chat in the inbox.
+# works, behind Settings → Inbox → "Sort chats as an inbox" (off by default;
+# every other flow runs with it off). This flow turns it on first and off
+# again at the end.
+#
+# Working chats wait on a Working shelf and come back to the top when they
+# finish; Settle moves a chat to Settled (with an Undo), Unsettle brings it
+# back; Snooze hides it on Snoozed, Wake brings it back marked "Woke" until
+# it is opened. Then "Hide chats while they work" off leaves a working chat
+# in the inbox.
 #
 # The working run is the Demo's "delegate the review" in w2 (notes), which
 # works for about nineteen seconds (DELEGATE_STEP_AT_MS in
 # src/lib/demo/subagents.ts): a plain message is answered in a second and a
 # half, before the list would ever see it working.
 #
-# A trailing swipe opens Settle and Snooze; dragged far enough it settles on
-# its own. Each swipe here taps the action only if the panel is still there,
-# so either way the swipe ends settled.
+# The trailing swipe: a short drag opens Settle and Snooze; a drag past the
+# panel (fullSwipeLine: 58% of the row, never short of the panel plus a
+# margin) settles with no tap. The two deliberate swipes below are drawn in
+# screen coordinates on a row brought to the middle of the screen
+# (centerElement), so each is a known length: 35% of the width (inside the
+# line) and 92% (past it).
 #
-# Leaves the Demo as it found it: every chat back in the inbox and the
-# setting back on. scripts/e2e.sh also clears both around this flow.
+# Leaves the Demo as it found it: every chat back in the inbox and both
+# settings back as they were. scripts/e2e.sh also clears them around it.
 appId: dev.herdr.HerdrChat
 ---
 - runFlow: _start.yaml
+
+# Settings → Inbox → "Sort chats as an inbox" on. Its other two rows only
+# show while it is.
+- runFlow: _open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: toggle-inbox
+    direction: DOWN
+- assertNotVisible:
+    id: toggle-hide-working
+- tapOn:
+    id: toggle-inbox
+- extendedWaitUntil:
+    visible:
+      id: toggle-hide-working
+    timeout: 5000
+- assertVisible:
+    id: settle-after
+- runFlow: _close-settings.yaml
 
 # Every Demo chat is in the inbox. w6's agent works, but w6 is a space card,
 # which never hides: its idle agent and its terminals would go with it.
@@ -26,6 +52,8 @@ appId: dev.herdr.HerdrChat
     visible:
       id: chat-row-w1
     timeout: 10000
+- assertNotVisible:
+    id: chat-group-needs-you
 - assertNotVisible:
     id: inbox-shelf-working
 - assertNotVisible:
@@ -88,6 +116,8 @@ appId: dev.herdr.HerdrChat
       id: chat-row-w2
 
 # Settle w2 from its swipe: "Settled · Undo", and w2 under "Settled · 1".
+# w2 is the top row, which cannot be brought to the middle, so this swipe is
+# the row's own; it taps Settle if the panel is open.
 - swipe:
     from:
       id: chat-row-w2
@@ -98,9 +128,6 @@ appId: dev.herdr.HerdrChat
       visible:
         id: swipe-action-settle
     commands:
-      - assertVisible:
-          id: swipe-action-snooze
-      - takeScreenshot: inbox-swipe-${APPEARANCE}
       - tapOn:
           id: swipe-action-settle
 - extendedWaitUntil:
@@ -125,35 +152,44 @@ appId: dev.herdr.HerdrChat
     below:
       id: chat-row-w2
 
-# Settled again, then brought back from the shelf with Unsettle.
-- swipe:
-    from:
-      id: chat-row-w2
-    direction: LEFT
+# A long swipe settles with no tap: w3, in the middle of the screen, dragged
+# across nearly the whole row. Nothing is tapped, the panel is not left
+# open, and the notice says it settled.
+- scrollUntilVisible:
+    element:
+      id: chat-row-w3
+    direction: DOWN
+    centerElement: true
 - waitForAnimationToEnd
-- runFlow:
-    when:
-      visible:
-        id: swipe-action-settle
-    commands:
-      - tapOn:
-          id: swipe-action-settle
+- swipe:
+    start: '96%, 50%'
+    end: '4%, 50%'
+    duration: 600
+- extendedWaitUntil:
+    visible:
+      id: undo-notice-message
+      text: Settled
+    timeout: 3000
+- assertNotVisible:
+    id: swipe-action-settle
 - extendedWaitUntil:
     visible:
       id: inbox-shelf-settled
+      text: Settled · 1
     timeout: 5000
 - scrollUntilVisible:
     element:
-      id: chat-row-w2
+      id: chat-row-w3
     direction: DOWN
     centerElement: true
 # A settled row is one line: its title, and when it was settled.
 - assertVisible:
-    id: chat-row-trailing-w2
+    id: chat-row-trailing-w3
 - takeScreenshot: inbox-settled-${APPEARANCE}
+# Brought back from the shelf with Unsettle.
 - swipe:
     from:
-      id: chat-row-w2
+      id: chat-row-w3
     direction: LEFT
 - waitForAnimationToEnd
 - tapOn:
@@ -163,8 +199,7 @@ appId: dev.herdr.HerdrChat
       id: inbox-shelf-settled
     timeout: 5000
 
-# Snooze w3 from its menu, for an hour: "Snoozed until …", and w3 under a
-# shut "Snoozed · 1".
+# The menu holds everything the swipe does, Rename and Close too.
 - scrollUntilVisible:
     element:
       id: chat-row-w3
@@ -172,9 +207,35 @@ appId: dev.herdr.HerdrChat
     centerElement: true
 - longPressOn:
     id: chat-row-w3
-- assertVisible: Rename workspace…
+- assertVisible: Settle
+- assertVisible: Snooze…
 - assertVisible: Don't settle automatically
-- tapOn: Snooze…
+- assertVisible: Rename workspace…
+- tapOn: Cancel
+
+# A short swipe opens the panel without settling: w4, in the middle of the
+# screen, dragged a third of the way. Snooze it from there for an hour:
+# "Snoozed until …", and w4 under a shut "Snoozed · 1".
+- scrollUntilVisible:
+    element:
+      id: chat-row-w4
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- swipe:
+    start: '90%, 50%'
+    end: '55%, 50%'
+    duration: 600
+- waitForAnimationToEnd
+- assertVisible:
+    id: swipe-action-snooze
+- assertVisible:
+    id: swipe-action-settle
+- assertNotVisible:
+    id: undo-notice
+- takeScreenshot: inbox-swipe-${APPEARANCE}
+- tapOn:
+    id: swipe-action-snooze
 - extendedWaitUntil:
     visible: 'In 1 hour · .*'
     timeout: 5000
@@ -190,7 +251,7 @@ appId: dev.herdr.HerdrChat
       text: Snoozed · 1
     timeout: 5000
 - assertNotVisible:
-    id: chat-row-w3
+    id: chat-row-w4
 - scrollUntilVisible:
     element:
       id: inbox-shelf-snoozed
@@ -201,7 +262,7 @@ appId: dev.herdr.HerdrChat
 # Its row says when it wakes.
 - extendedWaitUntil:
     visible:
-      id: chat-row-trailing-w3
+      id: chat-row-trailing-w4
       text: 1h
     timeout: 5000
 - takeScreenshot: inbox-snoozed-${APPEARANCE}
@@ -209,7 +270,7 @@ appId: dev.herdr.HerdrChat
 # Wake it from its swipe: back in the inbox, marked "Woke".
 - swipe:
     from:
-      id: chat-row-w3
+      id: chat-row-w4
     direction: LEFT
 - waitForAnimationToEnd
 - tapOn:
@@ -220,15 +281,15 @@ appId: dev.herdr.HerdrChat
     timeout: 5000
 - scrollUntilVisible:
     element:
-      id: chat-row-w3
+      id: chat-row-w4
     direction: UP
     centerElement: true
 - assertVisible:
-    id: chat-row-woke-w3
+    id: chat-row-woke-w4
 - takeScreenshot: inbox-woke-${APPEARANCE}
 # Opened and left, it has been seen: the mark goes.
 - tapOn:
-    id: chat-row-w3
+    id: chat-row-w4
 - extendedWaitUntil:
     visible:
       id: thread-title
@@ -237,11 +298,11 @@ appId: dev.herdr.HerdrChat
     id: thread-back
 - extendedWaitUntil:
     visible:
-      id: chat-row-w3
+      id: chat-row-w4
     timeout: 5000
 - extendedWaitUntil:
     notVisible:
-      id: chat-row-woke-w3
+      id: chat-row-woke-w4
     timeout: 5000
 
 # Settings → Inbox: with "Hide chats while they work" off, a working chat
@@ -284,7 +345,8 @@ appId: dev.herdr.HerdrChat
     id: inbox-shelf-working
 - takeScreenshot: inbox-not-hiding-${APPEARANCE}
 
-# The setting back on, as every other flow expects it.
+# Both settings back as every other flow expects them: hiding on, and the
+# list no inbox at all, grouped again.
 - runFlow: _open-settings.yaml
 - scrollUntilVisible:
     element:
@@ -292,4 +354,14 @@ appId: dev.herdr.HerdrChat
     direction: DOWN
 - tapOn:
     id: toggle-hide-working
+- tapOn:
+    id: toggle-inbox
+- extendedWaitUntil:
+    notVisible:
+      id: toggle-hide-working
+    timeout: 5000
 - runFlow: _close-settings.yaml
+- extendedWaitUntil:
+    visible:
+      id: chat-group-needs-you
+    timeout: 10000

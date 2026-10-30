@@ -1,6 +1,6 @@
 import { decodeSettleAfterDays, settleAfterLabel, shouldAutoSettle } from '../autoSettle';
 import { NO_INBOX_PREF, type InboxFacts, type InboxPref } from '../inbox';
-import { inboxRule } from '../rules';
+import { inboxRule, stampAt } from '../rules';
 
 const DAY = 86_400_000;
 const NOW = 100 * DAY;
@@ -56,6 +56,23 @@ describe('inboxRule', () => {
     const pref = { snoozedUntil: NOW + DAY, snoozedAt: NOW - DAY };
     expect(inboxRule(facts({ status: 'blocked', preview: null, pref }), NOW, options)).toEqual({ snoozedUntil: NOW });
     expect(inboxRule(facts({ status: 'done', preview: null, pref }), NOW, options)).toBeNull();
+  });
+
+  // The host's clock ahead of the phone's: the agent's last line is stamped
+  // a little in the phone's future. A settle stamped with the phone's time
+  // alone would be older than it, and the chat would come straight back.
+  it('stamps a settle no earlier than the last message, so a fast host clock does not undo it', () => {
+    const ahead = NOW + 90_000;
+    expect(stampAt(NOW, { timestamp: ahead })).toBe(ahead);
+    expect(stampAt(NOW, { timestamp: NOW - DAY })).toBe(NOW);
+    expect(stampAt(NOW, null)).toBe(NOW);
+    const settled = facts({ preview: { timestamp: ahead, fromUser: false }, pref: { settledAt: stampAt(NOW, { timestamp: ahead }), settledReason: 'user' } });
+    expect(inboxRule(settled, NOW, options)).toBeNull();
+    // Stamped by the phone alone, it bounced.
+    expect(inboxRule({ ...settled, pref: { ...settled.pref, settledAt: NOW } }, NOW, options)).toMatchObject({ settledAt: null });
+    // And the rule's own stamps follow the same rule.
+    const working = facts({ status: 'working', activeSince: NOW - 1000, preview: { timestamp: ahead, fromUser: false }, pref: { settledAt: NOW - DAY, settledReason: 'user' } });
+    expect(inboxRule(working, NOW, options)).toMatchObject({ unsettledAt: ahead });
   });
 
   it('settles an untouched chat as `auto`, only when allowed', () => {
