@@ -136,6 +136,11 @@ appId: dev.herdr.HerdrChat
       id: undo-notice-message
       text: Settled
     timeout: 3000
+# The shelves sit under the whole list, below the first screen of a phone.
+- scrollUntilVisible:
+    element:
+      id: inbox-shelf-settled
+    direction: DOWN
 - assertVisible:
     id: inbox-shelf-settled
     text: Settled · 1
@@ -148,6 +153,10 @@ appId: dev.herdr.HerdrChat
     timeout: 5000
 - assertNotVisible:
     id: undo-notice
+- scrollUntilVisible:
+    element:
+      id: chat-search
+    direction: UP
 - assertVisible:
     id: chat-row-w1
     below:
@@ -173,11 +182,13 @@ appId: dev.herdr.HerdrChat
     timeout: 3000
 - assertNotVisible:
     id: swipe-action-settle
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: inbox-shelf-settled
-      text: Settled · 1
-    timeout: 5000
+    direction: DOWN
+- assertVisible:
+    id: inbox-shelf-settled
+    text: Settled · 1
 - scrollUntilVisible:
     element:
       id: chat-row-w3
@@ -246,11 +257,13 @@ appId: dev.herdr.HerdrChat
       id: undo-notice-message
       text: 'Snoozed until .*'
     timeout: 3000
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: inbox-shelf-snoozed
-      text: Snoozed · 1
-    timeout: 5000
+    direction: DOWN
+- assertVisible:
+    id: inbox-shelf-snoozed
+    text: Snoozed · 1
 - assertNotVisible:
     id: chat-row-w4
 - scrollUntilVisible:
