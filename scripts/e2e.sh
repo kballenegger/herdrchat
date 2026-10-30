@@ -23,8 +23,8 @@
 set -u
 cd "$(dirname "$0")/.."
 
-ALL_FLOWS="regression/chat-list regression/new-chat regression/thread regression/keyboard regression/composer-keys regression/folder-trust regression/omp regression/grok regression/agy regression/history regression/multi-agent regression/welcome regression/subagents regression/agents-pane regression/slash-commands regression/shell-commands regression/terminal regression/space-layout regression/menu regression/tabs regression/list-modes regression/host-editor-keyboard regression/host-theme regression/notifications smoke new-chat tool-activity thread-header"
-BOTH_THEMES="smoke regression/chat-list regression/thread regression/agents-pane regression/tabs regression/terminal"
+ALL_FLOWS="regression/chat-list regression/inbox regression/new-chat regression/thread regression/keyboard regression/composer-keys regression/folder-trust regression/omp regression/grok regression/agy regression/history regression/multi-agent regression/welcome regression/subagents regression/agents-pane regression/slash-commands regression/shell-commands regression/terminal regression/space-layout regression/menu regression/tabs regression/list-modes regression/host-editor-keyboard regression/host-theme regression/notifications smoke new-chat tool-activity thread-header"
+BOTH_THEMES="smoke regression/chat-list regression/inbox regression/thread regression/agents-pane regression/tabs regression/terminal"
 THREAD_FLOWS="regression/thread regression/keyboard regression/composer-keys regression/history regression/subagents regression/agents-pane regression/slash-commands regression/shell-commands regression/omp regression/grok regression/agy tool-activity thread-header"
 
 # The flows a changed file can break. Shared code (components, theme, state,
@@ -38,11 +38,11 @@ flows_for() {
     *__tests__/*|*.test.ts|*.test.tsx|*.md|relay/*|site/*|modules/*/android/*) ;;
     src/features/thread/*|src/lib/thread*|src/lib/composer*|app/chat/*) echo "$THREAD_FLOWS" ;;
     src/state/agentsBar.ts) echo "regression/agents-pane" ;;
-    src/features/chats/*|"app/(tabs)/index.tsx") echo "regression/chat-list regression/list-modes regression/menu regression/multi-agent" ;;
+    src/features/chats/*|"app/(tabs)/index.tsx"|app/snooze.tsx|src/lib/inbox/*|src/state/inbox*|src/state/undoNotice.ts|src/state/customSnooze.ts|src/state/swipeActivity.ts) echo "regression/chat-list regression/inbox regression/list-modes regression/menu regression/multi-agent" ;;
     src/features/newChat/*|app/new-chat.tsx|app/folder-picker.tsx) echo "regression/new-chat regression/folder-trust new-chat" ;;
     src/features/terminal/*|src/lib/terminal/*|modules/herdr-terminal/*|modules/herdr-shell-registry/*) echo "regression/terminal regression/tabs" ;;
     src/features/files/*|src/features/devices/*|src/lib/files/*|"app/(tabs)/"*) echo "regression/tabs" ;;
-    src/features/settings/*|src/features/notifications/*|app/settings.tsx) echo "regression/notifications regression/host-theme regression/menu" ;;
+    src/features/settings/*|src/features/notifications/*|app/settings.tsx) echo "regression/notifications regression/host-theme regression/menu regression/inbox" ;;
     src/features/spaces/*|src/lib/spaces/*|app/space-layout.tsx) echo "regression/space-layout" ;;
     src/features/servers/*|app/server/*|app/hosts.tsx) echo "regression/host-editor-keyboard" ;;
     src/features/welcome/*|app/welcome.tsx) echo "regression/welcome" ;;
@@ -162,7 +162,9 @@ setup_device() {
 #   returnSends       composer-keys turns it off and on
 #   listMode          list-modes switches to Agents (cleared after it too, so a
 #                     failure does not leave every later flow on Agents)
-#   chat_prefs        chat-list pins and mutes a Demo chat
+#   chat_prefs        chat-list pins and mutes a Demo chat; inbox settles and
+#                     snoozes some (cleared after it too)
+#   hideWorking       inbox turns it off and on
 reset_for() {
   db=$1
   [ -f "$db" ] || return 0
@@ -171,6 +173,7 @@ reset_for() {
     regression/composer-keys) sqlite3 "$db" "delete from settings where key='returnSends'" ;;
     regression/list-modes) sqlite3 "$db" "delete from settings where key='listMode'" ;;
     regression/chat-list) sqlite3 "$db" "delete from chat_prefs where connection_id='demo'" ;;
+    regression/inbox) sqlite3 "$db" "delete from chat_prefs where connection_id='demo'; delete from settings where key='hideWorking'" ;;
   esac 2>/dev/null
   return 0
 }
@@ -196,7 +199,7 @@ worker() {
     appearance=${run##*:}
     name="$(echo "$flow" | tr '/' '-')-$appearance"
     case "$flow" in
-      tool-activity|regression/composer-keys|regression/list-modes|regression/chat-list)
+      tool-activity|regression/composer-keys|regression/list-modes|regression/chat-list|regression/inbox)
         xcrun simctl terminate "$device" dev.herdr.HerdrChat >/dev/null 2>&1
         reset_for "$db" "$flow" ;;
     esac
@@ -212,7 +215,7 @@ worker() {
     fi
     printf '%-40s %s\n' "$name" "$result"
     echo "${result%% *} $name" >>"$OUT/.results"
-    if [ "$flow" = "regression/list-modes" ]; then
+    if [ "$flow" = "regression/list-modes" ] || [ "$flow" = "regression/inbox" ]; then
       xcrun simctl terminate "$device" dev.herdr.HerdrChat >/dev/null 2>&1
       reset_for "$db" "$flow"
     fi

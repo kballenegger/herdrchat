@@ -16,6 +16,7 @@ import { DangerZone } from '@/features/settings/DangerZone';
 import { HighlightOnLink, isSettingsSection, SETTINGS_SECTIONS, type SettingsSection } from './HighlightOnLink';
 import { HostCard } from '@/features/settings/HostCard';
 import { HostThemeSection } from '@/features/settings/HostThemeSection';
+import { InboxSection } from '@/features/settings/InboxSection';
 import { ConnectionCheck } from '@/features/settings/ConnectionCheck';
 import { useSelectedConnection } from '@/state/connections';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
@@ -29,7 +30,7 @@ import { useTheme, type ThemePreference } from '@/theme/ThemeProvider';
 import { minTouchTarget, radius, screenPadding, spacing } from '@/theme/tokens';
 
 const SECTION_TITLES: Record<SettingsSection, string> = {
-  connection: 'Connection', appearance: 'Appearance', conversations: 'Conversations',
+  connection: 'Connection', appearance: 'Appearance', conversations: 'Conversations', inbox: 'Inbox',
   notifications: 'Notifications', storage: 'Storage', support: 'Support', about: 'About', danger: 'Danger zone',
 };
 
@@ -191,6 +192,10 @@ export default function SettingsScreen() {
               cellular; the live message stream is unaffected either way.
             </Text>
           </View></>}
+
+          {show('inbox') && <HighlightOnLink section="inbox" target={target} onMeasure={onMeasure}>
+            <InboxSection />
+          </HighlightOnLink>}
 
           {show('notifications') && <HighlightOnLink section="notifications" target={target} onMeasure={onMeasure}>
             <NotificationsSection />

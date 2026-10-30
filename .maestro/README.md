@@ -17,7 +17,8 @@ where regressions are found.
 
 | Flow | Covers |
 |------|--------|
-| `regression/chat-list` | pin and mute (swipe right, long press), the Pinned group appearing on screen, the trailing swipe opening and closing |
+| `regression/chat-list` | pin and mute (swipe right, long press), the Pinned group appearing on screen, the long-press menu holding Settle, Snooze…, Rename workspace… and Close chat |
+| `regression/inbox` | the list as an inbox: every Demo chat in it at launch with no shelves (w6, working, is a space card and never hides); w2 given "delegate the review" waits under "Working · 1" and returns above w1 when it finishes; Settle from the swipe with "Settled · Undo", Undo, Settle again and Unsettle from the settled row; Snooze… → "In 1 hour" from w3's menu, its slim row saying `1h` under "Snoozed · 1", Wake, "Woke" until it is opened; Settings → Inbox → "Hide chats while they work" off keeping a working w2 in the inbox, then back on. `scripts/e2e.sh` clears the Demo's chat prefs and the setting around it (screenshots `inbox-start`, `inbox-working`, `inbox-swipe`, `inbox-settled`, `inbox-snoozed`, `inbox-woke`, `inbox-not-hiding`, each `-<appearance>`) |
 | `regression/new-chat` | Start reachable with the keyboard up, Cancel |
 | `regression/omp` | an OMP chat read by its journal path, its folded tool run and provider-free model name, a reply, mute and unmute |
 | `regression/grok` | a Grok chat (`w8`, "infra") read from its ACP update log, found by its session id: the row named Grok with its last reply, the model (`grok-5`) in the header, its thought and command folded into one run, a reply sent and confirmed rather than "Failed to send" (screenshots `grok-row-<appearance>`, `grok-thread-<appearance>`) |
@@ -27,7 +28,7 @@ where regressions are found.
 | `regression/keyboard` | pulling the conversation down takes the keyboard with it and the composer stays above the keys and the home indicator (two screenshots to open) |
 | `regression/composer-keys` | the software keyboard's Return in the composer starts a new line and sends nothing, with Settings > "Return sends" on and off; the setting put back. Hardware Return, Shift-Return, Option-Return and Command-Return are key commands Maestro cannot press: jest covers them (`composerKeys.test.ts`, `Composer.test.tsx`) and the hand checks below |
 | `regression/menu` | the Chats menu: its rows, Settings, Hosts and New chat each opening as a sheet and Done landing back on the same list, and a cold `herdrchat://settings` link whose Done lands on the chats (screenshot `menu-<appearance>` with the menu open) |
-| `regression/list-modes` | the chats title as a picker: Agents listing each agent as a row of its own (`chat-row-w2` for the one-agent w2, `chat-row-w6:p1` and `chat-row-w6:p2` for w6's two, by `agentTestKey`), titled by its session with its workspace on its line, a row opening that agent's own thread, and no terminal row (`terminal-row-w6:p3`) among them, and Spaces bringing back w6's card with its two agents and its shell pane's terminal row under it; `scripts/e2e.sh` clears the saved choice around it (screenshots `list-agents-<appearance>`, `list-spaces-<appearance>`) |
+| `regression/list-modes` | the chats title as a picker: Agents listing each agent as a row of its own (`chat-row-w2` for the one-agent w2, `chat-row-w6:p1` and `chat-row-w6:p2` for w6's two, by `agentTestKey`; p2 is working, so it is under the shut "Working · 1" shelf until its header is tapped), titled by its session with its workspace on its line, a row opening that agent's own thread, and no terminal row (`terminal-row-w6:p3`) among them, and Spaces bringing back w6's card with its two agents and its shell pane's terminal row under it; `scripts/e2e.sh` clears the saved choice around it (screenshots `list-agents-<appearance>`, `list-spaces-<appearance>`) |
 | `regression/host-editor-keyboard` | the host editor's private key field reachable and typed into with the keyboard up (open the screenshot: the field must sit above the keys) |
 | `regression/folder-trust` | Claude's folder-trust question on a first start: shown with the folder, no numbers, answered with the arrows, the reply after it |
 | `regression/multi-agent` | a workspace with two agents: a row for each under it titled by its session, a thread with only that agent's lines, titled by its session, with the workspace and its name in the header, a reply landing on that agent's row alone, unread kept per agent |
@@ -335,10 +336,10 @@ maestro test -e BLOCKED_WORKSPACE_ID='<workspace-id>' .maestro/blocked-replies.y
 `agent wait` exiting 0 is the synchronisation point. Do not substitute a sleep,
 polling the screen for a prompt is what makes this class of test flaky.
 
-**Not covered against a real host:** the chat-row swipe actions. Maestro's `swipe` can open the
-panel, but the actions behind it are Rename and Close, one of which stops every
-process in a workspace on a real machine. A flow that runs against a live host
-must not have that as its failure mode, so the swipe is verified by hand.
+**Not covered against a real host:** the chat-row swipe actions. They are the
+Demo's (`regression/inbox`): on a real host a settle or snooze is only a pref
+on the phone, but the flow would leave the host's chats moved about, so it
+stays on the Demo.
 
 ### Against this Mac, in one command
 

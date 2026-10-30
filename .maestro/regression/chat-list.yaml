@@ -1,4 +1,6 @@
-# Pin, mute and the swipe actions on the chat list (PR #138, #139).
+# Pin, mute and the leading swipe actions on the chat list (PR #138, #139),
+# and the long-press menu that holds Rename and Close. The trailing swipe is
+# the inbox's (Settle, Snooze): regression/inbox.
 # Leaves the Demo as it found it: every pin and mute is undone.
 appId: dev.herdr.HerdrChat
 ---
@@ -48,7 +50,8 @@ appId: dev.herdr.HerdrChat
 
 # Every row of the menu is there, and Cancel leaves it doing nothing. On
 # Android it was an alert, which keeps three buttons: Close chat and Cancel
-# were cut, and picking an action was the only way out.
+# were cut, and picking an action was the only way out. Rename and Close
+# live here, not on a swipe: the trailing swipe is the inbox's.
 - scrollUntilVisible:
     element:
       id: chat-row-w2
@@ -56,42 +59,10 @@ appId: dev.herdr.HerdrChat
     centerElement: true
 - longPressOn:
     id: chat-row-w2
+- assertVisible: Settle
+- assertVisible: Snooze…
 - assertVisible: Rename workspace…
 - assertVisible: Close chat
+- takeScreenshot: chat-list-menu-all-${APPEARANCE}
 - tapOn: Cancel
 - assertNotVisible: Close chat
-- scrollUntilVisible:
-    element:
-      id: chat-row-w2
-    direction: DOWN
-    centerElement: true
-
-# Trailing swipe: Rename and Close, and it closes again cleanly.
-# The Demo's two-agent workspace (w6) lists under Working, above Idle, with a
-# row for each agent, which pushes w3 down to where the tab bar floats over
-# it; brought up to the middle first, so the swipe starts on the row.
-- scrollUntilVisible:
-    element:
-      id: chat-row-w3
-    direction: DOWN
-    centerElement: true
-- swipe:
-    from:
-      id: chat-row-w3
-    direction: LEFT
-- waitForAnimationToEnd
-- assertVisible:
-    id: swipe-action-rename
-# It renames the workspace, which a row titled by its session no longer shows.
-- assertVisible:
-    text: Rename workspace
-- assertVisible:
-    id: swipe-action-close
-- takeScreenshot: chat-list-trailing-${APPEARANCE}
-- swipe:
-    from:
-      id: chat-row-w3
-    direction: RIGHT
-- waitForAnimationToEnd
-- assertNotVisible:
-    id: swipe-action-close
