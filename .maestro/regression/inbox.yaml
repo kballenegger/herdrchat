@@ -188,9 +188,11 @@ appId: dev.herdr.HerdrChat
       id: chat-row-w3
     direction: DOWN
     centerElement: true
-# A settled row is one line: its title, and when it was settled.
+# A settled row is one line: its title, and when it was settled. A row is one
+# element to Maestro, so what it shows is read off its label.
 - assertVisible:
-    id: chat-row-trailing-w3
+    id: chat-row-w3
+    text: '.*, \d{1,2}:\d{2}.*'
 - takeScreenshot: inbox-settled-${APPEARANCE}
 # Brought back from the shelf with Unsettle.
 - swipe:
@@ -270,8 +272,8 @@ appId: dev.herdr.HerdrChat
 # Its row says when it wakes.
 - extendedWaitUntil:
     visible:
-      id: chat-row-trailing-w4
-      text: 1h
+      id: chat-row-w4
+      text: '.*, 1h'
     timeout: 5000
 - takeScreenshot: inbox-snoozed-${APPEARANCE}
 
@@ -293,7 +295,8 @@ appId: dev.herdr.HerdrChat
     direction: UP
     centerElement: true
 - assertVisible:
-    id: chat-row-woke-w4
+    id: chat-row-w4
+    text: '.*, Woke, .*'
 - takeScreenshot: inbox-woke-${APPEARANCE}
 # Opened and left, it has been seen: the mark goes.
 - tapOn:
@@ -310,7 +313,8 @@ appId: dev.herdr.HerdrChat
     timeout: 5000
 - extendedWaitUntil:
     notVisible:
-      id: chat-row-woke-w4
+      id: chat-row-w4
+      text: '.*, Woke, .*'
     timeout: 5000
 
 # Settings → Inbox: with "Hide chats while they work" off, a working chat
