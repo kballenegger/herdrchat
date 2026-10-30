@@ -44,6 +44,9 @@ appId: dev.herdr.HerdrChat
     visible:
       id: chat-row-w1
     timeout: 10000
-- assertVisible:
-    id: chat-row-w2
+# w2 is an idle row, below the first screen on a phone: scrolled to, not asserted in place.
+- scrollUntilVisible:
+    element:
+      id: chat-row-w2
+    direction: DOWN
 - takeScreenshot: find-chat-cleared-${APPEARANCE}
