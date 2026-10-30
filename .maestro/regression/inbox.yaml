@@ -156,10 +156,10 @@ appId: dev.herdr.HerdrChat
     below:
       id: chat-row-w2
 
-# A long swipe settles with no tap: w3, centred in the list (which puts its
-# middle at 45% of the screen, under the header), dragged
-# across nearly the whole row. Nothing is tapped, the panel is not left
-# open, and the notice says it settled.
+# Settle w3 the same way: the row's own swipe, which Maestro keeps short, so
+# Settle is tapped when the panel is open. (A drag at screen coordinates
+# landed on the row under w3 twice; a full swipe that settles with no tap is
+# a hand check.)
 - scrollUntilVisible:
     element:
       id: chat-row-w3
@@ -167,9 +167,17 @@ appId: dev.herdr.HerdrChat
     centerElement: true
 - waitForAnimationToEnd
 - swipe:
-    start: '96%, 45%'
-    end: '4%, 45%'
-    duration: 600
+    from:
+      id: chat-row-w3
+    direction: LEFT
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: swipe-action-settle
+    commands:
+      - tapOn:
+          id: swipe-action-settle
 - extendedWaitUntil:
     visible:
       id: undo-notice-message
@@ -222,9 +230,8 @@ appId: dev.herdr.HerdrChat
 - assertVisible: Rename workspace…
 - tapOn: Cancel
 
-# A short swipe opens the panel without settling: w4, in the middle of the
-# screen, dragged a third of the way. Snooze it from there for an hour:
-# "Snoozed until …", and w4 under a shut "Snoozed · 1".
+# The row's swipe opens the panel without settling: w4. Snooze it from there
+# for an hour: "Snoozed until …", and w4 under a shut "Snoozed · 1".
 - scrollUntilVisible:
     element:
       id: chat-row-w4
@@ -232,9 +239,9 @@ appId: dev.herdr.HerdrChat
     centerElement: true
 - waitForAnimationToEnd
 - swipe:
-    start: '90%, 45%'
-    end: '55%, 45%'
-    duration: 600
+    from:
+      id: chat-row-w4
+    direction: LEFT
 - waitForAnimationToEnd
 - assertVisible:
     id: swipe-action-snooze
