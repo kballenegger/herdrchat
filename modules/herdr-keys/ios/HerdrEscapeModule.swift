@@ -91,18 +91,3 @@ final class EscapeKeyView: ExpoView {
     onEscape([:])
   }
 }
-
-private extension UIResponder {
-  private static weak var herdrFound: UIResponder?
-
-  /// The first responder now, if any: the action goes to it when sent to nil.
-  static func herdrCurrentFirstResponder() -> UIResponder? {
-    herdrFound = nil
-    UIApplication.shared.sendAction(#selector(UIResponder.herdrCaptureFirstResponder), to: nil, from: nil, for: nil)
-    return herdrFound
-  }
-
-  @objc private func herdrCaptureFirstResponder() {
-    UIResponder.herdrFound = self
-  }
-}

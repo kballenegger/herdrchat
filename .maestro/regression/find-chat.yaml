@@ -1,0 +1,49 @@
+# Finding a chat from the search field with the keyboard: Return opens the
+# first chat the search found, and the field's clear button brings the whole
+# list back. Command-F and Esc are key commands the simulator's Maestro cannot
+# press; jest covers them (ChatsFind.test.tsx, ChatSearch.test.tsx,
+# chatRowTarget.test.ts) and they are checked by hand on a device with a
+# keyboard (see .maestro/README.md).
+appId: dev.herdr.HerdrChat
+---
+- runFlow: _start.yaml
+- tapOn:
+    id: chat-search
+- eraseText: 40
+- inputText: Release notes
+- extendedWaitUntil:
+    visible:
+      id: chat-row-w2
+    timeout: 10000
+- assertNotVisible:
+    id: chat-row-w1
+# Return, not a tap on the row: the first chat found opens.
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: bubble-d2-2
+    timeout: 15000
+- assertVisible:
+    id: composer-input
+- takeScreenshot: find-chat-opened-${APPEARANCE}
+
+# Back on the list the search is still there; its clear button empties it.
+- tapOn:
+    id: thread-back
+- extendedWaitUntil:
+    visible:
+      id: chat-search
+    timeout: 10000
+- assertNotVisible:
+    id: chat-row-w1
+- tapOn:
+    id: chat-search
+- tapOn: Clear text
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: chat-row-w1
+    timeout: 10000
+- assertVisible:
+    id: chat-row-w2
+- takeScreenshot: find-chat-cleared-${APPEARANCE}

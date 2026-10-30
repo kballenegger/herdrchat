@@ -151,16 +151,8 @@ final class SubmitShortcutView: ExpoView {
 
   /// The focused field inside this view is mid-composition (marked text).
   private var isComposing: Bool {
-    guard let field = Self.firstResponder(in: self) as? UITextInput else { return false }
+    guard let field = herdrFirstResponderInside() as? UITextInput else { return false }
     return field.markedTextRange != nil
-  }
-
-  private static func firstResponder(in view: UIView) -> UIView? {
-    if view.isFirstResponder { return view }
-    for subview in view.subviews {
-      if let found = firstResponder(in: subview) { return found }
-    }
-    return nil
   }
 
   /// Types only, not contents: asking raises no paste prompt.

@@ -4,6 +4,7 @@ import { Platform, View as MockView, type ViewProps } from 'react-native';
 
 import { HerdrClient } from '@/lib/herdr/client';
 import { DemoHost } from '@/lib/demo/host';
+import { useChatSearch } from '@/state/chatSearch';
 import { useChatSelection } from '@/state/chatSelection';
 import { useSpaceLayoutSheet } from '@/state/spaceLayout';
 import ChatsList from '../ChatsList';
@@ -280,5 +281,34 @@ describe('on iPad', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+// Return in the search opens the first chat it found, as a tap on that row
+// does; Esc (Command-F's other half, through the store) empties the search.
+describe('finding a chat from the keyboard', () => {
+  it('opens the first chat the search finds on Return', async () => {
+    const screen = await render(<ChatsList />);
+    await fireEvent.changeText(screen.getByTestId('chat-search'), 'Release notes');
+    expect(screen.queryByTestId('chat-row-w1')).toBeNull();
+    await fireEvent(screen.getByTestId('chat-search'), 'submitEditing');
+    expect(mockOpenChat).toHaveBeenCalledTimes(1);
+    expect(mockOpenChat).toHaveBeenCalledWith('demo', 'w2', 'Release notes summary', undefined, expect.any(String));
+  });
+
+  it('opens nothing on Return when nothing was found', async () => {
+    const screen = await render(<ChatsList />);
+    await fireEvent.changeText(screen.getByTestId('chat-search'), 'no chat is called this');
+    await fireEvent(screen.getByTestId('chat-search'), 'submitEditing');
+    expect(mockOpenChat).not.toHaveBeenCalled();
+  });
+
+  it('lists every chat again after Esc', async () => {
+    const screen = await render(<ChatsList />);
+    await fireEvent.changeText(screen.getByTestId('chat-search'), 'Release notes');
+    expect(screen.queryByTestId('chat-row-w1')).toBeNull();
+    await act(() => useChatSearch.getState().clear());
+    expect(screen.getByTestId('chat-search')).toHaveProp('value', '');
+    expect(screen.getByTestId('chat-row-w1')).toBeOnTheScreen();
   });
 });

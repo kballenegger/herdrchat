@@ -1,7 +1,7 @@
 {
   "platforms": ["apple", "android"],
   "apple": {
-    "modules": ["HerdrKeysModule", "HerdrEscapeModule", "HerdrHoverModule"]
+    "modules": ["HerdrKeysModule", "HerdrEscapeModule", "HerdrHoverModule", "HerdrFindModule"]
   },
   "android": {
     "modules": ["expo.modules.herdrkeys.HerdrKeysModule"]

@@ -18,6 +18,7 @@ where regressions are found.
 | Flow | Covers |
 |------|--------|
 | `regression/chat-list` | pin and mute (swipe right, long press), the Pinned group appearing on screen, the trailing swipe opening and closing |
+| `regression/find-chat` | the chats search found by typing ("Release notes" lists only w2), the keyboard's Return opening the first chat found (its thread and composer), the search kept on the way back and its clear button bringing the whole list back (screenshots `find-chat-opened-<appearance>`, `find-chat-cleared-<appearance>`). Command-F and Esc are key commands Maestro cannot press: jest covers them (`ChatsFind.test.tsx`, `ChatSearch.test.tsx`, `chatRowTarget.test.ts`) and the hand checks below |
 | `regression/new-chat` | Start reachable with the keyboard up, Cancel |
 | `regression/omp` | an OMP chat read by its journal path, its folded tool run and provider-free model name, a reply, mute and unmute |
 | `regression/grok` | a Grok chat (`w8`, "infra") read from its ACP update log, found by its session id: the row named Grok with its last reply, the model (`grok-5`) in the header, its thought and command folded into one run, a reply sent and confirmed rather than "Failed to send" (screenshots `grok-row-<appearance>`, `grok-thread-<appearance>`) |
@@ -72,6 +73,19 @@ hand on an iPad (or an iPhone) with a keyboard, after a native build:
 - Command-V with a picture and text both on the pasteboard (a copied web page)
   pastes the text.
 - At four pictures, Command-V with a picture does nothing new.
+- Command-F puts the cursor in the chats search, with nothing focused (right
+  after launch, and after tapping away from a field), with the search already
+  focused, and with the composer of the chat open beside the list focused on
+  iPad, mid-prompt; the prompt is still there afterwards.
+- "Find chat" is listed while Command is held, on the chats screen.
+- Return in the search opens the first chat it found (pinned first, then
+  Needs you, Working, Idle; the first agent under a space card, not its
+  layout); with nothing found it does nothing.
+- Esc in the search empties it and leaves the field; Esc in the composer
+  does not touch the search. With a space's layout card pinned, Esc closes
+  the card, and Command-F works again right after.
+- With Settings or Hosts open over the chats, or a chat pushed on an iPhone,
+  Command-F does not reach the chats search.
 - On Android with a hardware keyboard, the same list with Enter for Return,
   Ctrl-Enter for Command-Return, Alt-Enter for Option-Return and Ctrl-V for
   Command-V (Android asks no "Allow Paste").
