@@ -8,6 +8,7 @@ import { useChatSearch } from '@/state/chatSearch';
 import { useChatSelection } from '@/state/chatSelection';
 import { useSpaceLayoutSheet } from '@/state/spaceLayout';
 import { useInboxShelves } from '@/state/inboxShelves';
+import { inboxClock } from '@/state/inboxClock';
 import ChatsList from '../ChatsList';
 import { listChats, type ListedChat } from '../listedChat';
 import { buildSummaries } from '../useWorkspaces';
@@ -375,6 +376,8 @@ describe('the inbox', () => {
       w2: { settledAt: Date.now() - 60_000, settledReason: 'user' },
       w3: { snoozedUntil: Date.now() + 3_600_000 - 1_000, snoozedAt: Date.now() },
     };
+    // Match a real preference write: useChatPrefs advances the shared clock.
+    inboxClock.touch();
     const screen = await render(<ChatsList />);
     expect(screen.getByTestId('inbox-shelf-settled')).toHaveProp('accessibilityLabel', 'Settled · 1');
     expect(screen.getByTestId('chat-row-w2')).toHaveProp('accessibilityLabel', expect.stringMatching(/^Release notes summary, /));
