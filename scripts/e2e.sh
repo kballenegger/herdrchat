@@ -183,6 +183,16 @@ reset_for() {
   return 0
 }
 
+# A retry starts from the same settings as its first attempt. A failed inbox
+# flow can leave Inbox enabled, so retrying without reset fails at its setup.
+prepare_flow() {
+  case "$3" in
+    tool-activity|regression/composer-keys|regression/list-modes|regression/chat-list|regression/inbox)
+      xcrun simctl terminate "$1" dev.herdr.HerdrChat >/dev/null 2>&1
+      reset_for "$2" "$3" ;;
+  esac
+}
+
 # One run, killed after E2E_TIMEOUT seconds (default 480; a flow takes one to
 # three minutes). Maestro once hung for good after an error of its own, and the
 # suite sat waiting on it. perl's alarm carries over exec: macOS has no timeout(1).
@@ -203,17 +213,13 @@ worker() {
     flow=${run%:*}
     appearance=${run##*:}
     name="$(echo "$flow" | tr '/' '-')-$appearance"
-    case "$flow" in
-      tool-activity|regression/composer-keys|regression/list-modes|regression/chat-list|regression/inbox)
-        xcrun simctl terminate "$device" dev.herdr.HerdrChat >/dev/null 2>&1
-        reset_for "$db" "$flow" ;;
-    esac
+    prepare_flow "$device" "$db" "$flow"
     # A failure is tried once more and reported as such: Maestro's iOS driver
     # sometimes loses the view hierarchy ("Request for viewHierarchy failed")
     # with nothing wrong in the app.
     if run_flow "$device" "$appearance" "$name" "$flow"; then
       result=pass
-    elif run_flow "$device" "$appearance" "$name" "$flow"; then
+    elif prepare_flow "$device" "$db" "$flow" && run_flow "$device" "$appearance" "$name" "$flow"; then
       result="pass (on retry; see $name.first.log)"
     else
       result=FAIL

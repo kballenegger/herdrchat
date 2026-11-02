@@ -41,14 +41,12 @@ appId: dev.herdr.HerdrChat
 - runFlow:
     when:
       platform: iOS
-    # The share sheet has no Close button on iOS 27; it goes with a swipe down
-    # from its title. At 62% the swipe began on the sheet's top edge on a Pro
-    # Max and left it open.
+    # Dismiss through the empty header above the system share popover.
+    # A tap on a file row also opens that row after dismissing the popover;
+    # fixed or title-anchored swipes do not reliably dismiss it on iOS 26.
     commands:
-      - swipe:
-          start: 50%, 67%
-          end: 50%, 98%
-          duration: 300
+      - tapOn:
+          point: 50%, 10%
       - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:

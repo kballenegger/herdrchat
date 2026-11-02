@@ -307,12 +307,12 @@ appId: dev.herdr.HerdrChat
     id: chat-row-w4
     text: '.*, Woke, .*'
 - takeScreenshot: inbox-woke-${APPEARANCE}
-# Opened and left, it has been seen: the mark goes.
+# Wait for the session's transcript, not just its header: backing out before
+# the agent binds cannot stamp a read marker for that session.
 - tapOn:
     id: chat-row-w4
 - extendedWaitUntil:
-    visible:
-      id: thread-title
+    visible: .*last day is never counted.*
     timeout: 15000
 - tapOn:
     id: thread-back
