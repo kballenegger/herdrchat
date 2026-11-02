@@ -48,8 +48,16 @@ export const size = {
   quoteBar: 3,
   /** Readable tablet column; narrow windows and phones still use their full width. */
   contentMaxWidth: 840,
-  tabletBreakpoint: 768,
-  tabletSidebarWidth: 320,
+  /**
+   * The chats beside the open chat (`src/lib/splitView.ts`), from the
+   * narrowest window with room for both: the open iPhone Duo (669 pt), and
+   * not its cover screen (466 pt). Below an iPad's width the sidebar
+   * narrows so the open Duo's chat stays as wide as a phone's (389 pt).
+   */
+  splitBreakpoint: 640,
+  splitSidebarWidth: 320,
+  splitSidebarCompactWidth: 280,
+  splitSidebarFullFrom: 768,
   /** The presence avatar on a chat row. Its ring adds 4pt on each side. */
   avatar: 52,
   /** Compact provider badge in the grouped chat cards, and the glyph in it. */
@@ -500,6 +508,28 @@ export const connecting = {
   skeletonCycle: 1100,
   skeletonStagger: 140,
   skeletonDim: 0.45,
+} as const;
+
+/**
+ * The chat list's Claude usage footer. `staleAfterMs`: how old a capture may
+ * be before the footer says when it was taken ("as of 2:14 PM"); Claude saves
+ * one only while a session's status line redraws, so older means no session
+ * has run since. `clockTickMs`: how often the reset labels are redrawn
+ * against the clock, so a window that has reset leaves without a new read.
+ * `lowPercent`: at or below this much left, the bar turns to the attention
+ * colour. `barHeight`: the bar's thickness.
+ */
+export const usageFooter = {
+  /**
+   * How often the footer reads the usage file while it is on screen. Claude
+   * rewrites the file at every status line redraw, so the list's own poll (30 s
+   * while the host's events are live) left the footer half a minute behind.
+   */
+  liveReadMs: 5_000,
+  staleAfterMs: 10 * 60_000,
+  clockTickMs: 30_000,
+  lowPercent: 10,
+  barHeight: 4,
 } as const;
 
 /**

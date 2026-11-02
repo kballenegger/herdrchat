@@ -157,7 +157,7 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
         onLongPress={() => actions.manageChat(item, ownPersonal ? [
           { label: ownPinned ? 'Unpin' : 'Pin', onPress: () => prefs.togglePin(own) },
           ...(ownMutable ? [{ label: ownMuted ? 'Unmute notifications' : 'Mute notifications', onPress: () => prefs.toggleMute(own) }] : []),
-        ] : [])}
+        ] : [], pane.paneId)}
       />
     );
   }
@@ -207,7 +207,7 @@ export function ChatListItem({ row, prefs, actions, inbox, now, open, reads, ope
       selected={!space && openHere === (agent?.chatKey ?? item.workspaceId)}
       unread={agent === null ? isChatUnread(item, rowReads, openHere) : isAgentUnread(agent, rowReads, openHere)}
       onPress={() => openRow(row)}
-      onLongPress={() => actions.manageChat(item, menu)}
+      onLongPress={() => actions.manageChat(item, menu, agent?.pane?.paneId)}
       onSwiped={onSwiped}
       trailing={section === null ? renameCloseSwipe(rename, close) : choices?.swipe}
       actions={rowActions}

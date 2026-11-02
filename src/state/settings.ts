@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { DEFAULT_SETTLE_AFTER_DAYS, type SettleAfterDays } from '@/lib/inbox/autoSettle';
 import { DEFAULT_LIST_MODE, type ListMode } from '@/lib/listModes';
+import type { UsageShown } from '@/lib/usage/usageRows';
 import type { ThemePreference } from '@/theme/ThemeProvider';
 
 /**
@@ -88,6 +89,16 @@ export interface Settings {
   hideWorking: boolean;
   /** Settle a chat nothing has happened to for this many days; 0 never does. */
   settleAfterDays: SettleAfterDays;
+  /**
+   * Whether the chat list's Claude usage footer shows what is left of each
+   * limit or how much of it is used so far, picked from the footer's own
+   * sheet. Left by default: the footer answers "how much can I still do".
+   */
+  usageShown: UsageShown;
+}
+
+export function decodeUsageShown(value: string | null): UsageShown {
+  return value === 'used' ? 'used' : 'left';
 }
 
 /**
@@ -128,6 +139,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   inbox: false,
   hideWorking: true,
   settleAfterDays: DEFAULT_SETTLE_AFTER_DAYS,
+  usageShown: 'left',
 };
 
 interface SettingsState extends Settings {
@@ -164,6 +176,7 @@ export function settingsSnapshot(): Settings {
     inbox: state.inbox,
     hideWorking: state.hideWorking,
     settleAfterDays: state.settleAfterDays,
+    usageShown: state.usageShown,
   };
 }
 

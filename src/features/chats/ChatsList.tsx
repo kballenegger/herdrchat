@@ -39,6 +39,7 @@ import { HostNotices } from '@/features/chats/HostNotices';
 import { HostFeeds } from '@/features/chats/HostFeeds';
 import { NotesBar } from '@/features/youShouldKnow/NotesBar';
 import { useNotesOf } from '@/features/youShouldKnow/useHostNotes';
+import { UsageFooter } from '@/features/chats/UsageFooter';
 import { rowKey, type ListedChat, type OpenChat } from '@/features/chats/listedChat';
 import { LayoutPeekOverlay, useLayoutPeek } from '@/features/spaces/LayoutPeek';
 import { connectionRecovery } from '@/lib/connectionRecovery';
@@ -386,6 +387,13 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
                 <HostNotices notices={notices} />
               </View>
             )}
+            {/* Not under a host that could not be reached: its usage would
+                be as stale as its chats. */}
+            {error === null && (
+              <View style={{ paddingHorizontal: screenPadding, paddingBottom: insets.bottom + size.floatingBarClearance }}>
+                <UsageFooter host={connection} transport={client?.transport ?? null} />
+              </View>
+            )}
           </ScrollView>
         )
       ) : (
@@ -393,15 +401,7 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
           ref={list}
           data={rows}
           extraData={listExtra}
-          keyExtractor={(item) =>
-            item.kind === 'group' ? `group-${item.id}`
-              : item.kind === 'shelf' ? `shelf-${item.id}`
-              : item.kind === 'more' ? 'settled-more'
-              : item.kind === 'clear' ? 'all-clear'
-              : item.kind === 'pane' ? `pane-${rowKey(item.summary)}-${item.pane.paneId}`
-                : item.kind === 'terminal' ? `terminal-${rowKey(item.summary)}-${item.terminal.paneId}`
-                : item.kind === 'tab' ? `${rowKey(item.summary)}/tab/${item.tabId}`
-                : isAgentRow(item.summary) ? `agent-${agentRowKey(item.summary)}` : rowKey(item.summary)}
+          keyExtractor={chatListItemKey}
           getItemType={(item) => item.kind}
           // FlashList keeps the first visible row in place by default, so a
           // group that appears at the top (a chat pinned, or one that starts
@@ -429,6 +429,12 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
                 />
               )}
               <HostNotices notices={notices} />
+              {/* As in the empty list: not under a host that could not be
+                  reached, whose poll has stopped, or the footer's own read
+                  would keep asking it every few seconds. */}
+              {error === null && (
+                <UsageFooter host={connection} transport={client?.transport ?? null} style={{ marginTop: spacing.lg }} />
+              )}
               {seenSwipeHint || rows.length === 0 ? null : <SwipeHint />}
               {askForStar && (
                 <View style={{ marginTop: spacing.lg }}>
@@ -494,4 +500,16 @@ function ChatsForServer({ selectedWorkspaceId, selectedConnectionId, selectedTer
       />
     </Screen>
   );
+}
+
+/** Stable row identity across inbox shelves, spaces and agents. */
+function chatListItemKey(item: ListItemWithTerminals<ListedChat>): string {
+  return item.kind === 'group' ? `group-${item.id}`
+    : item.kind === 'shelf' ? `shelf-${item.id}`
+    : item.kind === 'more' ? 'settled-more'
+    : item.kind === 'clear' ? 'all-clear'
+    : item.kind === 'pane' ? `pane-${rowKey(item.summary)}-${item.pane.paneId}`
+    : item.kind === 'terminal' ? `terminal-${rowKey(item.summary)}-${item.terminal.paneId}`
+    : item.kind === 'tab' ? `${rowKey(item.summary)}/tab/${item.tabId}`
+    : isAgentRow(item.summary) ? `agent-${agentRowKey(item.summary)}` : rowKey(item.summary);
 }

@@ -4,17 +4,19 @@ import { useCallback, useState } from 'react';
 
 import { confirmDestructive, showActionSheet, type SheetAction } from '@/components/ActionSheet';
 import { haptics } from '@/components/haptics';
+import { terminalRowParams } from '@/features/terminal/listRows';
+import { openTerminal } from '@/features/terminal/navigation';
 import type { HerdrClient } from '@/lib/herdr/client';
 import { errorText } from '@/lib/herdr/protocol';
+import { AGENT_VERBS_VERSION, atLeast } from '@/lib/herdr/version';
 import { forgetWorkspace } from '@/state/threadCache';
+import { isTerminalAvailable } from '../../../modules/herdr-terminal/src';
 import { rowTitle } from './rowText';
 import type { ChatSummary } from './useWorkspaces';
 
 /**
- * Rename and close, as the affordances that reach them: the long-press menu,
- * VoiceOver's actions, and the confirmation each destructive one goes
- * through. The trailing swipe is the inbox's (Settle, Snooze), so these two
- * live in the menu.
+ * Rename and close through the long-press menu and VoiceOver, with a swipe
+ * when the inbox is off. The menu also opens a shell as a tab or a split.
  *
  * Out of the route because it is not layout. The screen composes rows; this
  * decides what happens to a workspace and how a person is asked first.
@@ -44,8 +46,9 @@ export function useChatActions<S extends ChatSummary = ChatSummary>({
   clearError: () => void;
   renameChat: (summary: S) => void;
   closeChat: (summary: S) => void;
-  /** `extra` goes above Rename and Close: pin, mute and the inbox's, which are the chat list's. */
-  manageChat: (summary: S, extra?: readonly SheetAction[]) => void;
+  /** `extra` goes above Rename and Close: pin, mute and inbox actions, which are the chat list's. */
+  /** `pressedPane`: the agent row pressed, which Split terminal splits beside. */
+  manageChat: (summary: S, extra?: readonly SheetAction[], pressedPane?: string) => void;
 } {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -107,16 +110,44 @@ export function useChatActions<S extends ChatSummary = ChatSummary>({
   );
 
   /**
-   * The chat's menu: the list's own actions (`extra`: pin, mute, settle,
-   * snooze), then Rename and Close.
+   * A shell in the workspace, opened at once: a tab of its own, or a split
+   * beside the agent whose row was pressed. A workspace's own row has none,
+   * so it splits the pane the desktop has in focus.
+   */
+  const openShell = useCallback(
+    (summary: S, how: 'tab' | 'split', pressed: string | undefined) => {
+      const on = target(summary);
+      if (on === null) return;
+      const beside = pressed
+        ?? summary.panes.find((pane) => pane.agent.focused)?.paneId
+        ?? summary.panes[0]?.paneId
+        ?? summary.shellPanes[0]?.paneId;
+      const made = how === 'split' && beside !== undefined
+        ? on.client.splitPane(beside, 'right')
+        : on.client.createTab(summary.workspaceId);
+      void made
+        .then((pane) => {
+          openTerminal(terminalRowParams(on.connectionId, { paneId: pane.paneId, pane, processName: null }));
+          return refresh();
+        })
+        .catch((thrown: unknown) => setError(errorText(thrown)));
+    },
+    [target, refresh]
+  );
+
+  /**
+   * The chat's menu: pin, mute and inbox actions, then terminals, Rename and Close.
    *
    * The long press is the one a person finds by trying things, so everything
    * a swipe does is here too: an action reachable only by a gesture is an
    * action most people never reach.
    */
   const manageChat = useCallback(
-    (summary: S, extra: readonly SheetAction[] = []) => {
-      if (target(summary) === null) return;
+    (summary: S, extra: readonly SheetAction[] = [], pressedPane?: string) => {
+      const on = target(summary);
+      if (on === null) return;
+      // Where a terminal can open, on a herdr with `tab create` and `pane split`.
+      const shells = isTerminalAvailable && atLeast(on.client.reportedVersion, AGENT_VERBS_VERSION);
       haptics.medium();
       showActionSheet({
         // The row's own title, so the sheet names what was pressed. Rename
@@ -125,12 +156,16 @@ export function useChatActions<S extends ChatSummary = ChatSummary>({
         title: rowTitle(summary),
         actions: [
           ...extra,
+          ...(shells ? [
+            { label: 'New terminal tab', onPress: () => openShell(summary, 'tab', pressedPane) },
+            { label: 'Split terminal', onPress: () => openShell(summary, 'split', pressedPane) },
+          ] : []),
           { label: 'Rename workspace…', onPress: () => renameChat(summary) },
           { label: 'Close chat', destructive: true, onPress: () => closeChat(summary) },
         ],
       });
     },
-    [target, renameChat, closeChat]
+    [target, renameChat, closeChat, openShell]
   );
 
   return {

@@ -7,11 +7,13 @@ import { useDeviceIcons } from './deviceIcons';
 import { loadHostThemes, mirrorHostThemes } from './hostTheme';
 import { loadSlashCatalogues, mirrorSlashCatalogues } from './slashCommands';
 import { decodeSettleAfterDays } from '@/lib/inbox/autoSettle';
+import { loadUsageConsent } from './usage';
 import { decodeListMode } from '@/lib/listModes';
 import {
   SETTINGS_DEFAULTS,
   decodeBool,
   decodePollScale,
+  decodeUsageShown,
   isThemePreference,
   useSettings,
 } from './settings';
@@ -57,6 +59,7 @@ export function Hydrate({ children }: { children: ReactNode }) {
         inbox,
         hideWorking,
         settleAfterDays,
+        usageShown,
       ] =
         await Promise.all([
           loadConnections(db),
@@ -77,6 +80,7 @@ export function Hydrate({ children }: { children: ReactNode }) {
           getSetting(db, 'inbox'),
           getSetting(db, 'hideWorking'),
           getSetting(db, 'settleAfterDays'),
+          getSetting(db, 'usageShown'),
           // Before the connections land, so the selected host opens in its
           // own colours rather than flashing the default first.
           loadHostThemes(db).catch(() => undefined),
@@ -84,6 +88,9 @@ export function Hydrate({ children }: { children: ReactNode }) {
           loadSlashCatalogues(db).catch(() => undefined),
           // The glyph each host was given, so rows draw it from launch.
           useDeviceIcons.getState().load(db).catch(() => undefined),
+          // The hosts the person agreed to read Claude usage from, so the
+          // footer offers no setup where it is already done.
+          loadUsageConsent(db).catch(() => undefined),
         ]);
       hydrateSettings({
         themePreference: isThemePreference(theme) ? theme : SETTINGS_DEFAULTS.themePreference,
@@ -102,6 +109,7 @@ export function Hydrate({ children }: { children: ReactNode }) {
         inbox: decodeBool(inbox, SETTINGS_DEFAULTS.inbox),
         hideWorking: decodeBool(hideWorking, SETTINGS_DEFAULTS.hideWorking),
         settleAfterDays: decodeSettleAfterDays(settleAfterDays),
+        usageShown: decodeUsageShown(usageShown),
       });
       // After the settings: `hydrated` is what the welcome waits on, and it
       // must not read the defaults (never welcomed) for a moment first.
